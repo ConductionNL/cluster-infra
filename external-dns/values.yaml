@@ -22,9 +22,8 @@ env:
         name: cloudflare-credentials
         key: api-token
 
-extraArgs:
-  # Never enable Cloudflare proxy – cert-manager uses HTTP-01 challenges
-  - --cloudflare-proxied=false
+# cloudflare-proxied is false by default – do not set it.
+# Enabling it would break cert-manager HTTP-01 challenges.
 
 # sync = upsert + delete. External DNS owns what it creates.
 policy: sync
