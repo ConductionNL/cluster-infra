@@ -1,0 +1,60 @@
+---
+# External DNS – Cloudflare provider for commonground.nu
+# https://kubernetes-sigs.github.io/external-dns/
+
+# Only manage records in this zone
+domainFilters:
+  - commonground.nu
+
+# Watch Ingress resources for hostnames
+sources:
+  - ingress
+
+# Provider
+provider:
+  name: cloudflare
+
+# Cloudflare API token from Kubernetes secret (DNS-only, no proxying)
+env:
+  - name: CF_API_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: cloudflare-credentials
+        key: api-token
+
+extraArgs:
+  # Never enable Cloudflare proxy – cert-manager uses HTTP-01 challenges
+  - --cloudflare-proxied=false
+
+# sync = upsert + delete. External DNS owns what it creates.
+policy: sync
+
+# Unique ID stamped into TXT ownership records.
+# Do NOT change this after first deploy – changing it orphans existing records.
+txtOwnerId: conduction-cluster
+
+# Check interval
+interval: 1m
+
+# RBAC – needs ClusterRole to watch Ingresses across all namespaces
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  name: external-dns
+
+# Namespace to deploy into
+namespace: external-dns
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 50Mi
+  limits:
+    cpu: 100m
+    memory: 100Mi
+
+# Log level – set to debug temporarily if records aren't appearing
+logLevel: info
+logFormat: text
