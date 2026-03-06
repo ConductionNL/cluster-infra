@@ -1,0 +1,27 @@
+---
+# cinder-rwx: Cinder multi-attach StorageClass for ReadWriteMany workloads
+#
+# Uses tier-1m volume type (replicated SSD with multi-attach enabled).
+# Allows a single Cinder block volume to be attached to multiple nodes
+# simultaneously, enabling RS>1 for Nextcloud and similar workloads.
+#
+# Risk note: ext4 on a shared block device does not coordinate writes across
+# nodes at the filesystem level. Safe for predominantly read-only mounts with
+# infrequent, operator-serialised writes (e.g. Nextcloud /var/www/html).
+# Always enable maintenance mode before platform upgrades.
+#
+# Verify tier-1m supports multi-attach:
+#   openstack volume type show tier-1m
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: cinder-rwx
+  labels:
+    app.kubernetes.io/part-of: cluster-infra
+    app.kubernetes.io/component: storage
+provisioner: cinder.csi.openstack.org
+parameters:
+  type: tier-1m
+allowVolumeExpansion: true
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer

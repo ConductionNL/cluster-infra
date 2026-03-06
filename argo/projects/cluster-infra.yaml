@@ -35,6 +35,8 @@ spec:
       kind: ClusterRoleBinding
     - group: apiextensions.k8s.io
       kind: CustomResourceDefinition
+    - group: storage.k8s.io
+      kind: StorageClass
 
   # Namespace-scoped resources
   namespaceResourceWhitelist:
@@ -49,17 +51,5 @@ spec:
       groups:
         - cluster-admins
 
-  # Sync windows: platform changes only Mon–Thu 17:00–07:00 UTC
-  syncWindows:
-    - kind: deny
-      schedule: "0 7 * * 1-5"   # weekdays office hours
-      duration: 10h
-      applications:
-        - "*"
-      manualSync: false
-    - kind: allow
-      schedule: "0 17 * * 1-4"  # Mon–Thu evenings
-      duration: 14h
-      applications:
-        - "*"
-      manualSync: true
+  # No sync windows – cluster-infra has no client-facing workloads and can
+  # be updated at any time. Deployment governance lives in Nextcloud-base.
