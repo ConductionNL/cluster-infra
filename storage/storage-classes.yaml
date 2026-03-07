@@ -24,4 +24,7 @@ parameters:
   type: tier-1m
 allowVolumeExpansion: true
 reclaimPolicy: Retain
-volumeBindingMode: WaitForFirstConsumer
+# Immediate is required for ReadWriteMany volumes.
+# WaitForFirstConsumer would bind the PV to the first pod's node, creating
+# a node-affinity that prevents other pods from scheduling elsewhere.
+volumeBindingMode: Immediate
