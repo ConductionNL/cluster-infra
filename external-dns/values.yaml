@@ -5,6 +5,8 @@
 # Only manage records in this zone
 domainFilters:
   - commonground.nu
+  - openwoo.app
+  - opencatalogi.nl
 
 # Watch Ingress resources for hostnames
 sources:

@@ -16,16 +16,7 @@ Planned (not yet migrated from Helm):
 
 ## Deployment Windows
 
-**Everything in this repo is a platform change.** There are no tenant-only exceptions.
-
-| Window | Allowed? |
-|--------|----------|
-| Mon–Thu 17:00–07:00 UTC | ✅ |
-| Mon–Fri 07:00–17:00 UTC | ❌ Office hours |
-| Friday 17:00+ | ❌ |
-| Saturday / Sunday | ❌ |
-
-Exception: mwest2020 can explicitly approve an out-of-window deployment.
+No restrictions — cluster-infra has no client-facing workloads and can be updated at any time. Deployment governance (office hours, Mon–Thu evenings only) applies to `Nextcloud-base`, not here.
 
 ## Repository Structure
 
@@ -49,7 +40,7 @@ Since Argo CD is managed via Helm (not GitOps yet), new components require a one
 # 1. Create the AppProject
 kubectl apply -f argo/projects/cluster-infra.yaml
 
-# 2. Create the Cloudflare secret (DNS edit token for commonground.nu)
+# 2. Create the Cloudflare secret (DNS edit token for all managed zones)
 kubectl create namespace external-dns
 kubectl create secret generic cloudflare-credentials \
   -n external-dns \
@@ -73,7 +64,7 @@ kubectl apply -f argo/applications/external-dns.yaml
 
 - Watches all Ingress resources cluster-wide
 - Creates/updates/deletes Cloudflare DNS records automatically when Ingresses change
-- Domain filter: `commonground.nu` — ignores all other zones
+- Domain filter: `commonground.nu`, `openwoo.app`, `opencatalogi.nl` — ignores all other zones
 - Cloudflare proxy is **disabled** (DNS-only) — required for cert-manager HTTP-01 challenges
 - `txtOwnerId: conduction-cluster` — **never change this** after first deploy, it will orphan existing DNS records
 - Sync interval: 1 minute

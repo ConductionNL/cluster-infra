@@ -1,6 +1,6 @@
 # Cloudflare API Token
 
-External DNS uses a Cloudflare API Token to create, update and delete DNS records in the `commonground.nu` zone. This document explains how to create the token and load it into the cluster.
+External DNS uses a Cloudflare API Token to create, update and delete DNS records in the `commonground.nu`, `openwoo.app` and `opencatalogi.nl` zones. This document explains how to create the token and load it into the cluster.
 
 ## Token permissions
 
@@ -12,7 +12,10 @@ Required permissions:
 |----------|------|------------|
 | Zone | DNS | Edit |
 
-Zone Resources: `Include` → `Specific zone` → `commonground.nu`
+Zone Resources:
+- `Include` → `Specific zone` → `commonground.nu`
+- `Include` → `Specific zone` → `openwoo.app`
+- `Include` → `Specific zone` → `opencatalogi.nl`
 
 No other permissions are needed. Do not enable Cloudflare proxy permissions.
 
@@ -24,7 +27,7 @@ No other permissions are needed. Do not enable Cloudflare proxy permissions.
 4. Set:
    - Token name: `external-dns-conduction-cluster`
    - Permissions: `Zone` → `DNS` → `Edit`
-   - Zone Resources: `Include` → `Specific zone` → `commonground.nu`
+   - Zone Resources: `Include` → `Specific zone` → `commonground.nu`, `openwoo.app`, `opencatalogi.nl`
    - (Optional) Client IP filtering: restrict to your cluster's egress IP for extra security
    - TTL: set an expiry if your policy requires it
 5. Click **Continue to summary** → **Create Token**
@@ -86,4 +89,4 @@ The TXT record (`conduction-cluster-...`) is External DNS's ownership marker —
 - Creates a `TXT` ownership record alongside each DNS record
 - Deletes both records automatically when the Ingress is removed
 - Only touches records it owns (identified by `txtOwnerId: conduction-cluster`)
-- Only operates within the `commonground.nu` zone — all other zones are ignored
+- Only operates within the `commonground.nu`, `openwoo.app` and `opencatalogi.nl` zones — all other zones are ignored
