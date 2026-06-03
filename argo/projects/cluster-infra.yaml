@@ -10,7 +10,7 @@ spec:
   description: Cluster-wide infrastructure components (External DNS, cert-manager, etc.)
 
   sourceRepos:
-    - "https://github.com/ConductionNL/cluster-infra.git"
+    - "https://codeberg.org/Conduction/cluster-infra.git"
     - "https://kubernetes-sigs.github.io/external-dns/"
     - "https://charts.jetstack.io"              # cert-manager (future)
     - "https://kubernetes.github.io/ingress-nginx" # ingress-nginx (future)
