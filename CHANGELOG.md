@@ -10,6 +10,11 @@
     stale. **Breaking:** the 2.x major dropped the served `external-secrets.io/v1beta1` API
     (only `v1` is served now) — Nextcloud-base consumers were moved to `external-secrets.io/v1`
     in the same window. `generators.external-secrets.io/v1alpha1` (ClusterGenerator) unchanged.
+  - **AppProject `cluster-infra` widened** (`argo/projects/cluster-infra.yaml`) so the app can
+    sync: added sourceRepo `https://charts.external-secrets.io`, destination namespace
+    `external-secrets`, and cluster resources `Validating`/`MutatingWebhookConfiguration`
+    (the chart's webhook). Without this the app fails `InvalidSpecError` (repo/destination
+    not permitted) and installs nothing.
   - Deploy in the platform sync window; Nextcloud-base's ESO consumers depend on these CRDs being present first.
 
 ## 2026-06-03
