@@ -1,0 +1,39 @@
+# External Secrets Operator — Helm values.
+# Chart: external-secrets/external-secrets (see argo/applications/external-secrets.yaml).
+#
+# Installs the controller, webhook, and cert-controller plus the CRDs. The
+# ClusterSecretStore / generators / ExternalSecrets that USE this operator live
+# in the consuming repos (e.g. Nextcloud-base platform/externalsecrets/).
+
+# Install the CRDs with the chart (we have no separate CRD-management step).
+installCRDs: true
+
+# Generators (Password / ClusterGenerator) are an explicit opt-in on some chart
+# versions; harmless if already on. Keep enabled so Nextcloud-base can generate
+# per-tenant passwords.
+extraArgs: {}
+
+# Modest footprint — this is a control-plane operator, not a data-plane workload.
+resources:
+  requests:
+    cpu: 25m
+    memory: 96Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+webhook:
+  resources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+certController:
+  resources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# Surface the operator's own metrics if a ServiceMonitor stack is present later.
+serviceMonitor:
+  enabled: false

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-06-22
+
+- **feat: install External Secrets Operator** (`argo/applications/external-secrets.yaml` + `external-secrets/values.yaml`).
+  - Cluster-wide ESO controller + CRDs via the `external-secrets/external-secrets` Helm chart, same pattern as `external-dns` (upstream chart + this repo's values, `installCRDs: true`, `ServerSideApply=true` for the large CRDs).
+  - Rationale: ESO is a cluster capability (like cert-manager / external-dns), not an app-platform concern — consumers (`ClusterSecretStore` / `ExternalSecret`) live in the platform repos (e.g. Nextcloud-base `platform/externalsecrets/`).
+  - Chart `targetRevision` pinned to `0.10.5` — **verify/bump to current stable before deploy**.
+  - Deploy in the platform sync window; Nextcloud-base's ESO consumers depend on these CRDs being present first.
+
 ## 2026-06-03
 
 - **chore: migrate Argo source GitHub → Codeberg**
