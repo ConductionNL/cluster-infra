@@ -1,0 +1,13 @@
+# Helm values for emberstack/reflector.
+#
+# Reflector watches Secrets/ConfigMaps annotated for reflection and copies them into
+# the namespaces matched by their annotations. Here it distributes the cert-manager
+# `wildcard-openwoo-tls` Secret into every WOO tenant namespace so the frontend
+# Ingresses can reference one shared wildcard cert.
+#
+# Chart defaults are fine; we only cap resources (cluster-infra resource policy:
+# limits only, no requests for non-critical controllers).
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi

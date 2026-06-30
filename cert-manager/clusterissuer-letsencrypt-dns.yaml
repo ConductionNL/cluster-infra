@@ -1,0 +1,30 @@
+---
+# DNS-01 ClusterIssuer for wildcard certificates (Let's Encrypt production).
+#
+# HTTP-01 (the existing `letsencrypt-prod` issuer) cannot issue wildcards, so this
+# issuer uses the DNS-01 Cloudflare solver. It reuses the SAME Cloudflare API token
+# that external-dns already uses (Zone:DNS:Edit on openwoo.app) — but cert-manager
+# reads DNS-01 secrets from ITS OWN namespace, so `cloudflare-credentials` must exist
+# in the `cert-manager` namespace (see bootstrap in README / CHANGELOG).
+#
+# NOTE: the Cloudflare token needs Zone:Read in ADDITION to DNS:Edit — DNS-01 does a
+# zone lookup. Verify the token scope before relying on this.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-dns
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: robert@conduction.nl
+    privateKeySecretRef:
+      name: letsencrypt-dns-account-key
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-credentials
+              key: api-token
+        selector:
+          dnsZones:
+            - "openwoo.app"

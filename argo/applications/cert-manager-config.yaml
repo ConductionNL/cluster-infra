@@ -1,0 +1,42 @@
+---
+# Argo CD Application for cert-manager CONFIG (not the operator — that is still the
+# legacy Helm install). Applies the DNS-01 ClusterIssuer + the wildcard openwoo
+# Certificate from this repo's cert-manager/ directory.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager-config
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: cluster-infra
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: cluster-infra
+
+  source:
+    repoURL: "https://codeberg.org/Conduction/cluster-infra.git"
+    targetRevision: HEAD
+    path: cert-manager
+    directory:
+      recurse: false
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false   # cert-manager namespace already exists
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 2m
+
+  revisionHistoryLimit: 5

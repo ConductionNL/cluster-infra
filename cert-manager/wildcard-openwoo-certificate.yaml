@@ -1,0 +1,35 @@
+---
+# Single wildcard certificate covering every WOO frontend host:
+#   *.openwoo.app          (prod   — e.g. zwolle.openwoo.app)
+#   *.accept.openwoo.app   (accept — e.g. wassenaar.accept.openwoo.app)
+#
+# ONE Let's Encrypt cert for the whole fleet (replaces per-tenant HTTP-01 certs and
+# the 50-certs/week/registered-domain pressure entirely). cert-manager writes the key
+# pair into the `wildcard-openwoo-tls` Secret in this (cert-manager) namespace; the
+# reflector annotations below tell emberstack/reflector to copy that Secret into every
+# WOO tenant namespace, where the frontend Ingresses reference it.
+#
+# Reflection is scoped by namespace-name regex to WOO tenant namespaces only
+# (*-accept / *-prod / *-test / *-demo) so the wildcard private key is NOT spread into
+# system/third-party namespaces. Widen/narrow the regex if the namespace convention
+# changes.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-openwoo
+  namespace: cert-manager
+spec:
+  secretName: wildcard-openwoo-tls
+  issuerRef:
+    name: letsencrypt-dns
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.openwoo.app"
+    - "*.accept.openwoo.app"
+  # Annotations stamped onto the generated Secret so reflector replicates it.
+  secretTemplate:
+    annotations:
+      reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
+      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: ".*-(accept|prod|test|demo)"
+      reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
+      reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: ".*-(accept|prod|test|demo)"

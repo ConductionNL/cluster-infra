@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-06-30
+
+- **feat: DNS-01 wildcard cert for openwoo.app + reflector** (cert-manager-config + reflector Argo apps).
+  - `cert-manager/clusterissuer-letsencrypt-dns.yaml` — new `letsencrypt-dns` ClusterIssuer
+    using the **DNS-01 Cloudflare solver** (HTTP-01 can't issue wildcards). Reuses the
+    existing Cloudflare token (`cloudflare-credentials/api-token`, Zone:DNS:Edit on
+    openwoo.app) — but cert-manager reads DNS-01 secrets from its OWN namespace, so the
+    secret must be bootstrapped into `cert-manager` (see Bootstrap below). Same ACME
+    account email as `letsencrypt-prod` (robert@conduction.nl).
+  - `cert-manager/wildcard-openwoo-certificate.yaml` — ONE wildcard `Certificate`
+    (`*.openwoo.app` + `*.accept.openwoo.app`) → Secret `wildcard-openwoo-tls`. Replaces
+    per-tenant HTTP-01 issuance for WOO frontends and removes the 50-certs/week/registered-
+    domain pressure entirely. `secretTemplate` annotations tell reflector to replicate it.
+  - `reflector/` + `argo/applications/reflector.yaml` — emberstack/reflector replicates the
+    wildcard Secret into WOO tenant namespaces (regex `.*-(accept|prod|test|demo)`), so each
+    frontend Ingress can reference one shared cert. **Chart version `7.1.288` is a placeholder
+    — VERIFY against the chart repo before first sync.**
+  - **AppProject widened** (`argo/projects/cluster-infra.yaml`): + sourceRepo
+    `https://emberstack.github.io/helm-charts`, + destination ns `reflector`,
+    + clusterResourceWhitelist `cert-manager.io/ClusterIssuer`.
+  - **Caveat:** the Cloudflare token needs **Zone:Read** in addition to DNS:Edit (DNS-01 does
+    a zone lookup) — verify the token scope.
+  - **Bootstrap (one-time, manual):** create `cloudflare-credentials` in the `cert-manager`
+    namespace (same token external-dns uses), then `kubectl apply` the AppProject + the
+    reflector and cert-manager-config Applications.
+
 ## 2026-06-22
 
 - **feat: install External Secrets Operator** (`argo/applications/external-secrets.yaml` + `external-secrets/values.yaml`).
