@@ -1,0 +1,72 @@
+---
+# Fuse device-plugin (squat/generic-device-plugin) — advertises the extended resource
+# squat.ai/fuse so UNPRIVILEGED pods can request /dev/fuse. Consumers on con-prod:
+# talos con-ci-oci (rootless podman, overlay + fuse-overlayfs) and runner-build (rootless
+# buildah). The plugin itself runs privileged with host /dev access to enumerate devices
+# and register with the local kubelet — that is trusted cluster-infra; the CI workloads
+# stay unprivileged, which is the whole point of exposing /dev/fuse via a device-plugin.
+#
+# Scoped to node-pool worker-0b1p9-1 (where con-ci runs) to keep the privileged /dev
+# DaemonSet off the nextcloud/data pools.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fuse-device-plugin
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: fuse-device-plugin
+    app.kubernetes.io/part-of: cluster-infra
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fuse-device-plugin
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fuse-device-plugin
+        app.kubernetes.io/part-of: cluster-infra
+    spec:
+      priorityClassName: system-node-critical
+      automountServiceAccountToken: false
+      # Only the pool that runs con-ci workloads.
+      nodeSelector:
+        worker.gardener.cloud/pool: worker-0b1p9-1
+      # A device-plugin must run wherever its consumers might land, so tolerate taints.
+      tolerations:
+        - operator: Exists
+          effect: NoSchedule
+        - operator: Exists
+          effect: NoExecute
+      containers:
+        - name: generic-device-plugin
+          # ghcr.io/squat/generic-device-plugin, tag latest pinned by index digest
+          # (resolved 2026-07-01). Digest is immutable regardless of the tag moving.
+          image: ghcr.io/squat/generic-device-plugin@sha256:dc192e164c69b03f156765793a1be62ca437709ae477b27ca7d8f3dcf5021576
+          args:
+            - --domain=squat.ai
+            # Only the fuse device (no serial/video/audio). count=20 = concurrent
+            # /dev/fuse allocations per node (well above con-ci runner capacities).
+            - --device={"name":"fuse","groups":[{"count":20,"paths":[{"path":"/dev/fuse"}]}]}
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "10Mi"
+            limits:
+              cpu: "50m"
+              memory: "20Mi"
+          volumeMounts:
+            - name: device-plugin
+              mountPath: /var/lib/kubelet/device-plugins
+            - name: dev
+              mountPath: /dev
+      volumes:
+        - name: device-plugin
+          hostPath:
+            path: /var/lib/kubelet/device-plugins
+        - name: dev
+          hostPath:
+            path: /dev

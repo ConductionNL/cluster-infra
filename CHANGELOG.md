@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-07-01
+
+- **feat: fuse device-plugin (extended resource `squat.ai/fuse`)** — new `fuse-device-plugin`
+  Argo app.
+  - `fuse-device-plugin/daemonset.yaml` — squat/generic-device-plugin DaemonSet in
+    `kube-system`, fuse-only (`--domain=squat.ai --device …/dev/fuse…`, count 20). Runs
+    **privileged** with host `/dev` to enumerate devices + register with kubelet; consumer
+    pods stay unprivileged. Image pinned by index digest
+    (`ghcr.io/squat/generic-device-plugin@sha256:dc192e16…`, tag `latest` @ 2026-07-01).
+  - **Scoped to node-pool `worker.gardener.cloud/pool: worker-0b1p9-1`** (where con-ci runs)
+    to keep the privileged /dev DaemonSet off the nextcloud/data pools.
+  - `argo/applications/fuse-device-plugin.yaml` — new Application, syncs to `kube-system`.
+  - Unblocks talos `con-ci-oci` (overlay + fuse-overlayfs instead of vfs) and `runner-build`
+    (rootless buildah), which both request `squat.ai/fuse: "1"`.
+  - **No AppProject change:** `kube-system` destination already whitelisted (storage uses it);
+    a DaemonSet is namespaced, so no clusterResourceWhitelist entry needed.
+  - **Bootstrap (one-time):** `kubectl apply -f argo/applications/fuse-device-plugin.yaml`,
+    then ArgoCD auto-syncs.
+
 ## 2026-06-30
 
 - **feat: DNS-01 wildcard cert for openwoo.app + reflector** (cert-manager-config + reflector Argo apps).
