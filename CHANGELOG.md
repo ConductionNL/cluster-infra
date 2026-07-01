@@ -2,6 +2,22 @@
 
 ## 2026-07-01
 
+- **feat: podman-rootless Localhost seccomp profile installer** — new `seccomp-profiles`
+  Argo app.
+  - `seccomp-profiles/podman-rootless.json` — podman's own default seccomp profile
+    (containers/common), which permits `clone`/`clone3`/`unshare`/`setns` unconditionally
+    (the containerd RuntimeDefault profile gates those behind CAP_SYS_ADMIN).
+  - `seccomp-profiles/installer-daemonset.yaml` — DaemonSet (kube-system, pool
+    `worker-0b1p9-1`) that copies the profile to `/var/lib/kubelet/seccomp/podman-rootless.json`
+    on each node and stays running (re-places on node roll). Runs as root only to write the
+    root-owned hostPath; **not** privileged. Delivered via kustomize configMapGenerator
+    (content-hashed name → editing the profile rolls the installer).
+  - `argo/applications/seccomp-profiles.yaml` — new Application (auto-detects kustomize),
+    syncs to `kube-system`.
+  - Lets talos `con-ci-oci` (rootless podman) create user namespaces under baseline
+    PodSecurity (which forbids seccomp `Unconfined` but allows `Localhost`).
+  - **Bootstrap (one-time):** `kubectl apply -f argo/applications/seccomp-profiles.yaml`.
+
 - **feat: fuse device-plugin (extended resource `squat.ai/fuse`)** — new `fuse-device-plugin`
   Argo app.
   - `fuse-device-plugin/daemonset.yaml` — squat/generic-device-plugin DaemonSet in

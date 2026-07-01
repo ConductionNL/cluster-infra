@@ -1,0 +1,78 @@
+---
+# Installs the podman-rootless Localhost seccomp profile onto pool worker-0b1p9-1 nodes at
+# /var/lib/kubelet/seccomp/podman-rootless.json. Lets UNPRIVILEGED rootless-podman pods
+# (talos con-ci-oci) create user namespaces under baseline PodSecurity: baseline forbids
+# seccomp Unconfined but allows Localhost. The profile (see the generated ConfigMap) is
+# podman's own default (containers/common), which permits clone/clone3/unshare/setns
+# unconditionally — no CAP_SYS_ADMIN gate, unlike the containerd RuntimeDefault profile.
+#
+# Copies at pod start and stays running, so a rolled node gets the profile re-placed. The
+# ConfigMap name is content-hashed (kustomize), so editing the profile rolls this DaemonSet
+# and re-copies. Runs as root only to write the root-owned hostPath; NOT privileged.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: seccomp-profile-installer
+  labels:
+    app.kubernetes.io/name: seccomp-profile-installer
+    app.kubernetes.io/part-of: cluster-infra
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: seccomp-profile-installer
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: seccomp-profile-installer
+        app.kubernetes.io/part-of: cluster-infra
+    spec:
+      priorityClassName: system-node-critical
+      automountServiceAccountToken: false
+      nodeSelector:
+        worker.gardener.cloud/pool: worker-0b1p9-1
+      tolerations:
+        - operator: Exists
+          effect: NoSchedule
+        - operator: Exists
+          effect: NoExecute
+      securityContext:
+        runAsUser: 0
+      containers:
+        - name: installer
+          image: docker.io/library/busybox@sha256:9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              cp /src/podman-rootless.json /host-seccomp/podman-rootless.json
+              chmod 0644 /host-seccomp/podman-rootless.json
+              echo "installed /var/lib/kubelet/seccomp/podman-rootless.json"
+              exec sleep infinity
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "16Mi"
+            limits:
+              cpu: "50m"
+              memory: "32Mi"
+          volumeMounts:
+            - name: profile-src
+              mountPath: /src
+              readOnly: true
+            - name: kubelet-seccomp
+              mountPath: /host-seccomp
+      volumes:
+        - name: profile-src
+          configMap:
+            name: seccomp-podman-rootless
+        - name: kubelet-seccomp
+          hostPath:
+            path: /var/lib/kubelet/seccomp
+            type: DirectoryOrCreate

@@ -1,0 +1,20 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# ArgoCD auto-detects kustomize (this file present). The profile JSON stays a real,
+# reviewable file and is delivered as a ConfigMap via configMapGenerator; the content hash
+# in the name means editing podman-rootless.json rolls the installer DaemonSet so nodes
+# get the new profile.
+namespace: kube-system
+
+resources:
+  - installer-daemonset.yaml
+
+configMapGenerator:
+  - name: seccomp-podman-rootless
+    files:
+      - podman-rootless.json
+    options:
+      labels:
+        app.kubernetes.io/part-of: cluster-infra
