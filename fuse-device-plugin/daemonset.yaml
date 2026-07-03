@@ -30,9 +30,18 @@ spec:
     spec:
       priorityClassName: system-node-critical
       automountServiceAccountToken: false
-      # Only the pool that runs con-ci workloads.
-      nodeSelector:
-        worker.gardener.cloud/pool: worker-0b1p9-1
+      # Cover BOTH the legacy con-ci pool AND the userns-enabled ci-oci pool (OR-match).
+      # ci-oci is where the rootless-podman/buildah build class runs and needs /dev/fuse for
+      # overlay+fuse-overlayfs (the baseline-legal storage path). Narrow to just
+      # {key: role, values: [ci-oci]} once con-ci-oci has fully moved off worker-0b1p9-1.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - { key: worker.gardener.cloud/pool, operator: In, values: ["worker-0b1p9-1"] }
+              - matchExpressions:
+                  - { key: role, operator: In, values: ["ci-oci"] }
       # A device-plugin must run wherever its consumers might land, so tolerate taints.
       tolerations:
         - operator: Exists
