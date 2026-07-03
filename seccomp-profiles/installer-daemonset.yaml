@@ -30,8 +30,19 @@ spec:
     spec:
       priorityClassName: system-node-critical
       automountServiceAccountToken: false
-      nodeSelector:
-        worker.gardener.cloud/pool: worker-0b1p9-1
+      # Cover BOTH the legacy pool AND the new userns-enabled ci-oci pool (OR-match).
+      # ci-oci MUST be covered — the con-ci-oci build pod references this profile as a
+      # Localhost profile and can only start where the file exists. Narrow to just
+      # {key: role, values: [ci-oci]} once con-ci-oci has fully moved off worker-0b1p9-1.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - { key: worker.gardener.cloud/pool, operator: In, values: ["worker-0b1p9-1"] }
+              - matchExpressions:
+                  - { key: role, operator: In, values: ["ci-oci"] }
+      # operator: Exists tolerates ANY taint, incl. dedicated=ci-oci:NoSchedule.
       tolerations:
         - operator: Exists
           effect: NoSchedule
