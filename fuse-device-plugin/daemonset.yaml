@@ -55,9 +55,14 @@ spec:
           image: ghcr.io/squat/generic-device-plugin@sha256:dc192e164c69b03f156765793a1be62ca437709ae477b27ca7d8f3dcf5021576
           args:
             - --domain=squat.ai
-            # Only the fuse device (no serial/video/audio). count=20 = concurrent
-            # /dev/fuse allocations per node (well above con-ci runner capacities).
+            # fuse + tun only (no serial/video/audio). count=20 = concurrent
+            # allocations per node (well above con-ci runner capacities).
             - --device={"name":"fuse","groups":[{"count":20,"paths":[{"path":"/dev/fuse"}]}]}
+            # /dev/net/tun for rootless podman networking (pasta creates the tap device for
+            # per-workflow job networks — without it: "Failed to open() /dev/net/tun" on
+            # docker run via the con-ci-oci runner, 2026-07-04). Same unprivileged-consumer
+            # rationale as fuse.
+            - --device={"name":"tun","groups":[{"count":20,"paths":[{"path":"/dev/net/tun"}]}]}
           securityContext:
             privileged: true
           resources:

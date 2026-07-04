@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-07-04
+
+- **feat: fuse-device-plugin also advertises `squat.ai/tun`** (`/dev/net/tun`, count 20,
+  same pools). Needed by the con-ci-oci runner: rootless podman ≥5 sets up per-workflow job
+  networks with **pasta**, which creates a tap device and fails without `/dev/net/tun`
+  ("Failed to open() /dev/net/tun" on the first real `container:` job, 2026-07-04). Same
+  design as fuse: device-plugin injection so consumers stay unprivileged — no hostPath, no
+  extra caps. Consumer change (requesting `squat.ai/tun: 1`) lands in the `talos` repo.
+
 ## 2026-07-01
 
 - **feat: podman-rootless Localhost seccomp profile installer** — new `seccomp-profiles`
