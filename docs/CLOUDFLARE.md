@@ -1,3 +1,8 @@
+---
+last_reviewed: 2026-07-06
+owner: mark
+---
+
 # Cloudflare API Token
 
 External DNS uses a Cloudflare API Token to create, update and delete DNS records in the `commonground.nu`, `openwoo.app` and `opencatalogi.nl` zones. This document explains how to create the token and load it into the cluster.
