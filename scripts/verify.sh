@@ -52,4 +52,20 @@ kubeconform -strict -ignore-filename-pattern 'values\.yaml' \
   -schema-location default -schema-location "$CRD_SCHEMAS" \
   -summary argo/ fuse-device-plugin/ storage/ cert-manager/
 
+# Doc-assertion (docs-claims): het componentenoverzicht in docs/index.md
+# dekt precies de Argo Applications — geen spookrijen, geen gaten.
+python3 - <<'PYEOF'
+import pathlib
+import sys
+
+apps = {p.stem for p in pathlib.Path("argo/applications").glob("*.yaml")}
+index = pathlib.Path("docs/index.md").read_text(errors="replace")
+missing = sorted(a for a in apps if a not in index)
+if missing:
+    print("doc-assertion FAALT: Applications zonder rij in docs/index.md: "
+          + ", ".join(missing), file=sys.stderr)
+    sys.exit(1)
+print(f"doc-assertion OK ({len(apps)} Applications gedekt in de index)")
+PYEOF
+
 echo "verify: OK"

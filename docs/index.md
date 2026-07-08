@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-07-06
+last_reviewed: 2026-07-08
 owner: mark
 ---
 
@@ -16,7 +16,7 @@ upgrade lifecycle.
 | Component | What it does |
 |---|---|
 | `external-dns` | syncs Ingress hostnames to Cloudflare DNS (zones: commonground.nu, openwoo.app, opencatalogi.nl) |
-| `cert-manager` (config) | Let's Encrypt DNS-01 ClusterIssuer + wildcard certificate for openwoo.app |
+| `cert-manager-config` | Let's Encrypt DNS-01 ClusterIssuer + wildcard certificate for openwoo.app |
 | `external-secrets` | External Secrets Operator |
 | `reflector` | mirrors Secrets/ConfigMaps across namespaces |
 | `fuse-device-plugin` | advertises `squat.ai/fuse` and `squat.ai/tun` for rootless podman (used by the talos CI runners) |

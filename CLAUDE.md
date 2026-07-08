@@ -6,13 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This repo manages **cluster-wide infrastructure components** for the Conduction Kubernetes cluster, deployed via Argo CD. It is intentionally separate from product-specific platforms (e.g., `Nextcloud-base`) because these components serve the entire cluster, require cluster-wide RBAC, and have their own upgrade lifecycle.
 
-Current components:
-- **External DNS** — syncs Ingress hostnames to Cloudflare DNS automatically
-
-Planned (not yet migrated from Helm):
-- cert-manager
-- ingress-nginx
-- Argo CD itself
+Current components (one Argo CD Application each, see `argo/applications/`):
+- **external-dns** — syncs Ingress hostnames to Cloudflare DNS
+- **cert-manager config** — Let's Encrypt DNS-01 ClusterIssuer + wildcard cert
+- **external-secrets** — External Secrets Operator
+- **reflector** — mirrors Secrets/ConfigMaps across namespaces
+- **fuse-device-plugin** — squat.ai/fuse + squat.ai/tun (talos CI runners)
+- **seccomp-profiles** — installs podman-rootless.json on nodes (talos dep)
+- **storage** — StorageClass definitions
 
 ## Deployment Windows
 
@@ -73,3 +74,12 @@ kubectl apply -f argo/applications/external-dns.yaml
 ## Upgrading External DNS
 
 Update `targetRevision` in `argo/applications/external-dns.yaml`. Check the [External DNS changelog](https://github.com/kubernetes-sigs/external-dns/releases) before upgrading. Only do this within the allowed deployment windows.
+
+## Agent-guardrails
+
+- Operatie-cataloog: `docs/agents.md` — **niet gecatalogiseerd = eerst
+  vragen**. Deze componenten zijn cluster-breed: fouten raken alles.
+- Grondwaarheid: MCP `conduction-docs` (handboek) boven modelkennis.
+- Vóór afronden: `./scripts/verify.sh` groen; docs mee in dezelfde
+  wijziging. Push, secrets (Cloudflare-token!) en kubectl doet een
+  mens. Nooit `--no-verify`.
