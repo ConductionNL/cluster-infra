@@ -1,0 +1,65 @@
+# Zie docs/argocd.md (zelfbeheer, bootstrap, break-glass).
+# Elke 12u verse shoot-kubeconfigs (token-TTL is 24u; 2x marge).
+# Gebruikt bootstrap-secret gardener-sa-kubeconfig. Zie docs/argocd.md.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: argocd-credential-refresh
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+    spec:
+      activeDeadlineSeconds: 600
+      backoffLimit: 3
+      template:
+        metadata:
+          labels:
+            app: argocd-credential-refresh
+        spec:
+          containers:
+          - command:
+            - /bin/sh
+            - /scripts/refresh.sh
+            image: alpine/k8s:1.29.2
+            imagePullPolicy: IfNotPresent
+            name: refresh
+            resources:
+              limits:
+                cpu: 500m
+                memory: 256Mi
+              requests:
+                cpu: 100m
+                memory: 128Mi
+            terminationMessagePath: /dev/termination-log
+            terminationMessagePolicy: File
+            volumeMounts:
+            - mountPath: /scripts
+              name: scripts
+              readOnly: true
+            - mountPath: /gardener-sa
+              name: gardener-sa
+              readOnly: true
+          dnsPolicy: ClusterFirst
+          restartPolicy: OnFailure
+          schedulerName: default-scheduler
+          securityContext: {}
+          serviceAccount: argocd-credential-refresh
+          serviceAccountName: argocd-credential-refresh
+          terminationGracePeriodSeconds: 30
+          volumes:
+          - configMap:
+              defaultMode: 493
+              name: argocd-credential-refresh-script
+            name: scripts
+          - name: gardener-sa
+            secret:
+              defaultMode: 420
+              items:
+              - key: kubeconfig
+                path: kubeconfig
+              secretName: gardener-sa-kubeconfig
+  schedule: 0 */12 * * *
+  successfulJobsHistoryLimit: 3
+  suspend: false

@@ -1,0 +1,26 @@
+# Zie docs/argocd.md (zelfbeheer, bootstrap, break-glass).
+# Argo CD-webinterface op admin.commonground.nu (TLS via cert-manager
+# secret argocd-server-tls; backend is de HTTPS-poort van argocd-server).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+  name: argocd-server-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: admin.commonground.nu
+    http:
+      paths:
+      - backend:
+          service:
+            name: argocd-server
+            port:
+              number: 443
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - admin.commonground.nu
+    secretName: argocd-server-tls

@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-07-08
+last_reviewed: 2026-07-10
 owner: mark
 ---
 
@@ -15,6 +15,7 @@ upgrade lifecycle.
 
 | Component | What it does |
 |---|---|
+| `argocd` | Argo CD itself, self-managed from this repo (pinned upstream + explicit delta; see [argocd.md](argocd.md)) |
 | `external-dns` | syncs Ingress hostnames to Cloudflare DNS (zones: commonground.nu, openwoo.app, opencatalogi.nl) |
 | `cert-manager-config` | Let's Encrypt DNS-01 ClusterIssuer + wildcard certificate for openwoo.app |
 | `external-secrets` | External Secrets Operator |
@@ -28,5 +29,7 @@ the `AppProject` lives in `argo/projects/cluster-infra.yaml`.
 
 ## Pages
 
+- [Argo CD onder eigen beheer](argocd.md) — zelfbeheer-opzet, bootstrap-
+  secrets, adoptie, upgrade-procedure en break-glass (uitleg + how-to).
 - [Cloudflare API token](CLOUDFLARE.md) — creating, loading and rotating
   the token external-dns uses (how-to).

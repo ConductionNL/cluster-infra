@@ -1,0 +1,6 @@
+# Zie docs/argocd.md. Kaal: het enige live label is het automatische
+# kubernetes.io/metadata.name.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd

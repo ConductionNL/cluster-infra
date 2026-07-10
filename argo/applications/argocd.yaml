@@ -1,0 +1,39 @@
+# Argo CD beheert ZICHZELF via deze Application (change add-argocd-selfmanaged).
+#
+# Bewust conservatiever dan de andere cluster-infra-apps:
+# - GEEN automated/selfHeal en GEEN prune: elke wijziging aan Argo zelf is
+#   een handmatige, reviewde sync. selfHeal is een expliciet later besluit
+#   (na de observatieperiode; zie docs/argocd.md).
+# - Eerste sync MOET een no-op zijn: pas applyen nadat `kubectl diff -k
+#   argocd` leeg is (voorwaarden en volgorde: docs/argocd.md, fase 3).
+# - Break-glass: als Argo zichzelf breekt, repareert een mens met kubectl
+#   vanaf een werkstation; daarna wordt de repo weer leidend gemaakt.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: cluster-infra
+  # Bewust GEEN resources-finalizer: verwijderen van deze Application mag
+  # nooit Argo CD zelf (cascade) opruimen.
+spec:
+  project: cluster-infra
+
+  source:
+    repoURL: "https://codeberg.org/Conduction/cluster-infra.git"
+    targetRevision: HEAD
+    path: argocd
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  syncPolicy:
+    # Geen automated-blok: sync is handmatig.
+    syncOptions:
+      # Grote CRD's in de upstream-manifests overschrijden de
+      # last-applied-annotation-limiet; server-side apply voorkomt dat.
+      - ServerSideApply=true
+
+  revisionHistoryLimit: 5

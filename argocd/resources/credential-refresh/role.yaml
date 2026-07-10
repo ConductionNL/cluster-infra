@@ -1,0 +1,29 @@
+# Zie docs/argocd.md (zelfbeheer, bootstrap, break-glass).
+# Mag alleen de cluster-api.*-secrets in deze namespace beheren.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argocd-credential-refresh
+rules:
+- apiGroups:
+  - ''
+  resourceNames:
+  - cluster-api.con-prod.wh2mnkj.shoot.emk.fuga.cloud-1423932151
+  - cluster-api.conductionprod.wh2mnkj.shoot.emk.fuga.cloud-1749158776
+  - cluster-api.test-accept.wh2mnkj.shoot.emk.fuga.cloud-3791817028
+  - gardener-sa-kubeconfig
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - ''
+  resourceNames:
+  - gardener-sa-kubeconfig
+  resources:
+  - secrets
+  verbs:
+  - get

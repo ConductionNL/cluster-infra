@@ -18,6 +18,7 @@ Alles hier is cluster-breed: de blast radius is per definitie maximaal.
 | Docs bijwerken (componentenoverzicht in de index!) | autonoom | tekstueel | docs-contract-gate + componenten-assertie |
 | Versie-bumps (`targetRevision` van een chart) | mens-vereist | — | changelog van de upstream chart lezen; agent bereidt diff + samenvatting voor |
 | Secrets (Cloudflare-token, age) aanmaken/roteren | mens-vereist | — | CLOUDFLARE.md-runbook; nooit door een agent |
+| `argocd/`-manifests wijzigen (Argo's zelfbeheer, incl. rbac-cm!) | autonoom bewerken; rbac/SSO-wijzigingen **voorstel-eerst** | declaratief | verify (render + kubeconform + doc-assertie); sync mens-vereist, zie docs/argocd.md |
 | `kubectl apply`/delete, Argo-syncs | mens-vereist | — | agent levert commando + verwachte uitkomst |
 | Push | mens-vereist | — | gates draaien bij de mens |
 | `txtOwnerId` van external-dns wijzigen | verboden | — | orphaned DNS-records voor alles (staat in CLAUDE.md) |

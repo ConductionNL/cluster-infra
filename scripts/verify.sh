@@ -48,6 +48,14 @@ kubectl kustomize seccomp-profiles | kubeconform -strict \
   -schema-location default -schema-location "$CRD_SCHEMAS" - \
   || { echo "verify FAALT: seccomp-profiles" >&2; exit 1; }
 
+# argocd/ (zelfbeheer): render de kustomization (vendored upstream + delta).
+# CRD-definities zelf hebben geen schema in de catalog — expliciet geskipt;
+# alle overige objecten valideren strikt.
+kubectl kustomize argocd | kubeconform -strict \
+  -schema-location default -schema-location "$CRD_SCHEMAS" \
+  -skip CustomResourceDefinition - \
+  || { echo "verify FAALT: argocd" >&2; exit 1; }
+
 kubeconform -strict -ignore-filename-pattern 'values\.yaml' \
   -schema-location default -schema-location "$CRD_SCHEMAS" \
   -summary argo/ fuse-device-plugin/ storage/ cert-manager/

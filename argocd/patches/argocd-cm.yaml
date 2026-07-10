@@ -1,0 +1,27 @@
+# Zie docs/argocd.md (zelfbeheer, bootstrap, break-glass).
+# Delta op de upstream argocd-cm: url, SSO (OIDC via Keycloak;
+# clientSecret is een $-verwijzing naar bootstrap-secret argocd-oidc-keycloak),
+# admin uitgeschakeld, service-accounts, en een verouderde
+# configManagementPlugins-key (bewust as-is vastgelegd; opschonen = aparte PR).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+data:
+  url: https://admin.commonground.nu
+  admin.enabled: 'false'
+  oidc.config: 'name: Keycloak
+
+    issuer: https://iam.commonground.nu/realms/commonground
+
+    clientID: argocd
+
+    clientSecret: $argocd-oidc-keycloak:clientSecret
+
+    requestedScopes: ["openid", "profile", "email", "groups"]'
+  accounts.cluster-provisioner: apiKey
+  accounts.cluster-provisioner.enabled: 'true'
+  accounts.syncbot: apiKey
+  accounts.syncbot.enabled: 'true'
+  configManagementPlugins: "- name: helmfile\n  generate:\n    command: [\"bash\", \"-lc\"]\n    args:\
+    \ [\"cd $ARGOCD_APP_SOURCE_PATH && helmfile -f helmfile.yaml template\"]\n"

@@ -1,0 +1,32 @@
+# Zie docs/argocd.md (zelfbeheer, bootstrap, break-glass).
+# refresh.sh: haalt via de Gardener-API 24u-kubeconfigs op voor de drie
+# shoot-clusters en schrijft ze als cluster-api.*-secrets. Missiekritisch:
+# zonder dit verliest Argo binnen 24u de toegang tot alle beheerde clusters.
+apiVersion: v1
+data:
+  refresh.sh: "#!/bin/sh\nset -e\n\necho \"[$(date '+%Y-%m-%d %H:%M:%S')] Starting credential refresh\"\
+    \n\n# Config\nNAMESPACE=\"garden-wh2mnkj\"\nARGOCD_NAMESPACE=\"argocd\"\nEXPIRATION_SECONDS=86400\n\
+    \n# Setup kubeconfig voor Gardener API\nexport KUBECONFIG=/gardener-sa/kubeconfig\n\n# Clusters (shoot:secret-name)\n\
+    CLUSTERS=\"con-prod:cluster-api.con-prod.wh2mnkj.shoot.emk.fuga.cloud-1423932151\nconductionprod:cluster-api.conductionprod.wh2mnkj.shoot.emk.fuga.cloud-1749158776\n\
+    test-accept:cluster-api.test-accept.wh2mnkj.shoot.emk.fuga.cloud-3791817028\"\n\nfor entry in $CLUSTERS;\
+    \ do\n  SHOOT=$(echo $entry | cut -d: -f1)\n  SECRET=$(echo $entry | cut -d: -f2)\n  SERVER=\"api.${SHOOT}.wh2mnkj.shoot.emk.fuga.cloud\"\
+    \n  \n  echo \"[$(date '+%Y-%m-%d %H:%M:%S')] Processing: $SHOOT\"\n  \n  # Request admin kubeconfig\n\
+    \  KUBECONFIG_JSON=$(kubectl create \\\n    -f <(printf '{\"spec\":{\"expirationSeconds\":%d}}' \"\
+    $EXPIRATION_SECONDS\") \\\n    --raw \"/apis/core.gardener.cloud/v1beta1/namespaces/${NAMESPACE}/shoots/${SHOOT}/adminkubeconfig\"\
+    )\n  \n  KUBECONFIG_B64=$(echo \"$KUBECONFIG_JSON\" | jq -r '.status.kubeconfig')\n  KUBECONFIG_YAML=$(echo\
+    \ \"$KUBECONFIG_B64\" | base64 -d)\n  \n  # Extract credentials\n  CERT_DATA=$(echo \"$KUBECONFIG_YAML\"\
+    \ | yq -r '.users[0].user.\"client-certificate-data\"')\n  KEY_DATA=$(echo \"$KUBECONFIG_YAML\" |\
+    \ yq -r '.users[0].user.\"client-key-data\"')\n  CA_DATA=$(echo \"$KUBECONFIG_YAML\" | yq -r '.clusters[0].cluster.\"\
+    certificate-authority-data\"')\n  \n  # Build Argo CD config\n  CONFIG=$(cat <<EOF\n{\"tlsClientConfig\"\
+    :{\"insecure\":false,\"certData\":\"${CERT_DATA}\",\"keyData\":\"${KEY_DATA}\",\"caData\":\"${CA_DATA}\"\
+    }}\nEOF\n)\n  \n  # Update secret (switch to in-cluster kubeconfig)\n  unset KUBECONFIG\n  \n  CONFIG_B64=$(echo\
+    \ -n \"$CONFIG\" | base64 -w0)\n  SERVER_B64=$(echo -n \"https://$SERVER\" | base64 -w0)\n  \n  kubectl\
+    \ -n \"$ARGOCD_NAMESPACE\" patch secret \"$SECRET\" \\\n    --type='json' \\\n    -p=\"[{\\\"op\\\"\
+    :\\\"replace\\\",\\\"path\\\":\\\"/data/config\\\",\\\"value\\\":\\\"$CONFIG_B64\\\"},{\\\"op\\\"\
+    :\\\"replace\\\",\\\"path\\\":\\\"/data/server\\\",\\\"value\\\":\\\"$SERVER_B64\\\"}]\"\n  \n  #\
+    \ Switch back to Gardener kubeconfig for next iteration\n  export KUBECONFIG=/gardener-sa/kubeconfig\n\
+    \  \n  echo \"[$(date '+%Y-%m-%d %H:%M:%S')] Updated: $SHOOT\"\ndone\n\necho \"[$(date '+%Y-%m-%d\
+    \ %H:%M:%S')] All credentials refreshed\"\n"
+kind: ConfigMap
+metadata:
+  name: argocd-credential-refresh-script

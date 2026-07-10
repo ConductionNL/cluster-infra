@@ -1,6 +1,19 @@
 # Changelog
 
-## 2026-07-04
+## 2026-07-10
+
+- **feat: Argo CD onder eigen beheer (`argocd/`)** — change `add-argocd-selfmanaged`
+  (techbook). Argo CD v3.0.6 draaide als handmatige upstream-install; RBAC, SSO-config,
+  ingress en de credential-refresh-CronJob (verse 24u-kubeconfigs voor de 3
+  shoot-clusters via Gardener) waren onbeheerde clusterstate. Nu: vendored gepinde
+  upstream + expliciet delta (kustomize), Application `argo/applications/argocd.yaml`
+  (handmatige sync, geen prune/selfHeal, geen finalizer), docs/argocd.md (bootstrap-
+  secrets, adoptievolgorde, upgrade-procedure, break-glass) en verify-uitbreiding
+  (render + kubeconform + docs-claim). `kubectl diff -k argocd` toont uitsluitend de
+  drie gedocumenteerde, ongevaarlijke afwijkingen die de bootstrap-apply (fase 3, mens)
+  wegneemt. Security-finding onderweg: het Keycloak OIDC-clientSecret stond inline in
+  argocd-cm — in git vervangen door een `$argocd-oidc-keycloak:clientSecret`-verwijzing;
+  rotatie na adoptie (stap 4 in docs/argocd.md). Het cluster is niet aangeraakt.
 
 - **feat: fuse-device-plugin also advertises `squat.ai/tun`** (`/dev/net/tun`, count 20,
   same pools). Needed by the con-ci-oci runner: rootless podman ≥5 sets up per-workflow job

@@ -1,0 +1,26 @@
+# Argo CD beheert zichzelf vanaf dit pad (Application argo/applications/
+# argocd.yaml; zie docs/argocd.md voor bootstrap, upgrade en break-glass).
+#
+# Opzet: de kale upstream-manifests staan gepind en ongewijzigd onder
+# upstream/ (vendored — hermetisch, geen egress naar github nodig bij het
+# renderen, en een upgrade is één vervangen bestand met reviewbare diff).
+# Alles wat van upstream afwijkt staat expliciet in patches/ en resources/.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  - upstream/install-v3.0.6.yaml
+  - resources/namespace.yaml
+  - resources/ingress.yaml
+  - resources/credential-refresh/serviceaccount.yaml
+  - resources/credential-refresh/role.yaml
+  - resources/credential-refresh/rolebinding.yaml
+  - resources/credential-refresh/configmap.yaml
+  - resources/credential-refresh/cronjob.yaml
+
+patches:
+  - path: patches/argocd-cm.yaml
+  - path: patches/argocd-rbac-cm.yaml
+  - path: patches/argocd-ssh-known-hosts-cm.yaml

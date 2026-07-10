@@ -1,0 +1,14 @@
+# Zie docs/argocd.md (zelfbeheer, bootstrap, break-glass).
+# Bindt de refresh-Role aan de refresh-SA.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argocd-credential-refresh
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argocd-credential-refresh
+subjects:
+- kind: ServiceAccount
+  name: argocd-credential-refresh
+  namespace: argocd

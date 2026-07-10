@@ -1,0 +1,21 @@
+# Zie docs/argocd.md (zelfbeheer, bootstrap, break-glass).
+# Delta op de upstream argocd-rbac-cm: het volledige autorisatiebeleid
+# (policy.csv/policy.default/scopes). Wijzigingen hier zijn access-control:
+# review verplicht.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+data:
+  policy.csv: "g, kc-admins, role:admin\np, role:developer, applications, get, *, allow\np, role:developer,\
+    \ applications, sync, *, allow\np, role:developer, applications, action/*, *, allow\np, role:developer,\
+    \ logs, get, *, allow\ng, kc-developers, role:developer\ng, kc-readers, role:readonly\n\np, role:readonly,\
+    \ applications, get, */*, allow\np, role:readonly, repositories, get, *, allow\np, role:readonly,\
+    \ clusters, get, *, allow\np, role:syncbot, applications, get, */*, allow                        \
+    \        \np, role:syncbot, applications, create, */*, allow                             \np, role:syncbot,\
+    \ applications, update, */*, allow                             \np, role:syncbot, applications, sync,\
+    \ */*, allow                               \ng, syncbot, role:syncbot\n\np, role:cluster-provisioner,\
+    \ clusters, create, *, allow\np, role:cluster-provisioner, clusters, update, *, allow\ng, cluster-provisioner,\
+    \ role:cluster-provisioner\n"
+  policy.default: role:readonly
+  scopes: '[groups]'
