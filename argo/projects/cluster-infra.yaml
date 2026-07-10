@@ -19,6 +19,8 @@ spec:
 
   destinations:
     - server: https://kubernetes.default.svc
+      namespace: argocd        # zelfbeheer (Application argocd, docs/argocd.md)
+    - server: https://kubernetes.default.svc
       namespace: external-dns
     - server: https://kubernetes.default.svc
       namespace: cert-manager
