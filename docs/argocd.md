@@ -47,6 +47,12 @@ níét in git of in deze lijst. `argocd-server-tls` komt van cert-manager.
 
 ## Adoptie (fase 3 — elke stap door een mens)
 
+`scripts/argocd-adopt.sh` begeleidt deze fase: per stap (`stap1`…`stap4`,
+plus `status`) met controles vóór en ná, bevestiging per mutatie, en een
+harde stop zodra de diff méér bevat dan de drie gedocumenteerde
+afwijkingen. Het OIDC-secret wordt in-cluster gekopieerd en komt nooit
+in argv of terminal. De stappen, ook handmatig uitvoerbaar:
+
 Voorwaarde vooraf: `kubectl diff -k argocd` toont uitsluitend de drie
 bekende, ongevaarlijke afwijkingen (OIDC-regel in argocd-cm als
 secret-verwijzing; expliciet subject-namespace op zes RoleBindings;
