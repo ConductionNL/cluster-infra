@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-07-08
+last_reviewed: 2026-07-10
 owner: mark
 ---
 
@@ -14,7 +14,7 @@ Alles hier is cluster-breed: de blast radius is per definitie maximaal.
 | Operatie | Autonomie | Idempotentie | Verificatie |
 |---|---|---|---|
 | Component-values wijzigen (`<component>/values.yaml`) | autonoom bewerken | declaratief | `./scripts/verify.sh` (yaml + kubeconform + componenten-assertie); push mens |
-| Nieuw component voorbereiden (dir + Application + sourceRepos-regel) | autonoom bewerken | declaratief; bestaat al → geen tweede | verify; bootstrap-apply is mens-vereist |
+| Nieuw component voorbereiden (dir + Application + sourceRepos-regel) | **voorstel-eerst** (toon de manifests, schrijf na akkoord — creatie-regel 2026-07-10) | declaratief; bestaat al → geen tweede | verify; bootstrap-apply is mens-vereist |
 | Docs bijwerken (componentenoverzicht in de index!) | autonoom | tekstueel | docs-contract-gate + componenten-assertie |
 | Versie-bumps (`targetRevision` van een chart) | mens-vereist | — | changelog van de upstream chart lezen; agent bereidt diff + samenvatting voor |
 | Secrets (Cloudflare-token, age) aanmaken/roteren | mens-vereist | — | CLOUDFLARE.md-runbook; nooit door een agent |
