@@ -10,6 +10,9 @@ spec:
   description: Cluster-wide infrastructure components (External DNS, cert-manager, etc.)
 
   sourceRepos:
+    # Primair: GitHub (ConductionNL) — terugmigratie 2026-07-17. Codeberg-entry
+    # blijft tot alle apps her-applied zijn; daarna opruimen.
+    - "https://github.com/ConductionNL/cluster-infra.git"
     - "https://codeberg.org/Conduction/cluster-infra.git"
     - "https://kubernetes-sigs.github.io/external-dns/"
     - "https://charts.external-secrets.io"      # External Secrets Operator

@@ -21,7 +21,7 @@ spec:
   project: cluster-infra
 
   source:
-    repoURL: "https://codeberg.org/Conduction/cluster-infra.git"
+    repoURL: "https://github.com/ConductionNL/cluster-infra.git"
     targetRevision: HEAD
     path: argocd
 
