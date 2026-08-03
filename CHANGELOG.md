@@ -1,5 +1,170 @@
 # Changelog
 
+## 2026-08-03 — Argo CD v3.2.12 → v3.4.6 (slotstap; 3.3 overgeslagen)
+
+Stap 2 is gesynct en groen: alles op v3.2.12 en Ready, app Synced/Healthy op
+`e3708b8`, en de redis-major 7.2 → 8.2 verliep zonder problemen.
+
+- `argocd/upstream/install-v3.4.6.yaml` vervangt `install-v3.2.12.yaml`;
+  `argocd/kustomization.yaml` en `docs/argocd.md` wijzen mee.
+
+### Waarom 3.3 is overgeslagen
+
+De geplande tussenstap **v3.3.13 bevat een upstream-fout**: de
+`argocd-repo-server`-Deployment mount `argocd-cmd-params-cm` als volume maar
+declareert dat volume niet. `kubectl diff -k argocd` faalt daarop hard met
+`The Deployment "argocd-repo-server" is invalid:
+spec.template.spec.containers[0].volumeMounts[8].name: Not found:
+"argocd-cmd-params-cm"`.
+
+Per patchrelease uitgezocht: **v3.3.0 t/m v3.3.12 zijn goed, alleen v3.3.13 is
+kapot**, en in v3.4.6 staat het volume er weer wél. Keuze was v3.3.12 als
+tussenstap of direct door; besluit Mark: **direct naar v3.4.6**, omdat v3.3.12
+een wegwerp-tussenstap zou zijn op een release waar we niet blijven.
+
+Prijs daarvan is de bisect-mogelijkheid — de 3.3- en 3.4-wijzigingen landen in
+één sync. Dat weegt licht: de twee risico's zijn aan hun symptoom te
+onderscheiden (de CRD-wijziging kan geen SSO-storing geven, Dex kan geen
+CRD-fout geven). Loopt het mis, dan blijft **v3.3.12 de bruikbare tussenstap**.
+
+### Wat deze stap in het cluster doet (vooraf doorgerekend)
+
+`kubectl diff -k argocd`: **7415 regels over 10 objecten** — 6 Deployments, 1
+StatefulSet, 3 CRD's. Geen RBAC-wijzigingen; die verlaging landde al bij v3.2.12.
+
+- Images: argocd `v3.2.12` → `v3.4.6`, dex **`v2.43.0` → `v2.45.0`**, redis
+  `8.2.2-alpine` → `8.2.3-alpine`.
+- De render is volledig gecontroleerd op volume/mount-consistentie over álle
+  workloads en containers: geen inconsistenties. Diezelfde check ving de
+  v3.3.13-fout, dus hij is nu de standaardcontrole bij een vendored manifest.
+
+### SSA hard aangetoond
+
+De `applicationsets.argoproj.io`-CRD is **373.903 bytes** — ruim boven de
+262.144-byte-limiet van de last-applied-annotatie. Client-side apply kán dus
+niet meer. Geverifieerd vóór deze stap: `ServerSideApply=true` staat in
+`argo/applications/argocd.yaml`, de live CRD heeft alleen de field managers
+`argocd-controller` (Apply) en `kube-apiserver` (Update), en de
+last-applied-annotatie is 0 bytes. De upstream-val van deze grens geldt hier
+dus niet.
+
+### Aandachtspunt bij de sync
+
+**Dex gaat naar 2.45.0** — met `admin.enabled: "false"` betekent een kapotte Dex
+géén UI, en dan is kubectl break-glass de enige weg terug. Verifieer de
+SSO-login op admin.commonground.nu direct na de sync. De
+`ContinueOnConnectorFailure`-default van 2.45 geldt ongewijzigd; er is geen
+`argocd-cmd-params-cm`-patch.
+
+### Verificatie
+
+`scripts/verify.sh` groen (31 bestanden yaml-parse, kubeconform 13/13,
+doc-assertion OK). Gevendord bestand byte-identiek aan de voorbereidingskopie
+(sha256 `752b5a26…`). Sync door een mens.
+
+## 2026-08-03 — Argo CD v3.1.16 → v3.2.12 (stap 2 van 4)
+
+Stap 1 is gesynct en groen: alle componenten op v3.1.16 en Ready, app
+Synced/Healthy op `9b0811c`, SSO werkte, en `argocd-redis` pullde met succes van
+`public.ecr.aws` — daarmee is de onbekende uit stap 1 (nieuwe registry) opgelost
+bewijs geworden voor de rest van de reeks.
+
+- `argocd/upstream/install-v3.2.12.yaml` vervangt `install-v3.1.16.yaml`;
+  `argocd/kustomization.yaml` en `docs/argocd.md` wijzen mee.
+
+### Wat deze stap in het cluster doet (vooraf doorgerekend)
+
+`kubectl diff -k argocd`: **943 regels over 11 objecten** — 6 Deployments, 1
+StatefulSet, 2 CRD's, 1 ClusterRole, 1 Role.
+
+- Images: argocd `v3.1.16` → `v3.2.12`, redis `7.2.11-alpine` →
+  **`8.2.2-alpine`**. **Dex blijft `v2.43.0`** — geen SSO-risico in deze stap.
+- Alle overige workload-wijzigingen zijn nieuwe env-vars en één configMap-volume,
+  allemaal naar `argocd-cmd-params-cm`. Die ConfigMap bestaat, wordt door upstream
+  meegeleverd, en het volume staat op `optional: true` — dus geen risico dat een
+  pod niet start.
+
+### Correctie op de eerdere planning: Redis 8.x zit hier, niet in stap 4
+
+Bij het plannen is gemeld dat Redis pas in stap 4 naar 8.x zou gaan. Dat was
+fout: de major-sprong **7.2 → 8.2 gebeurt in deze stap**. De eerste
+inventarisatie miste het doordat het registry-pad van `redis:` naar
+`public.ecr.aws/docker/library/redis:` wijzigde en het grep-patroon daar niet op
+matchte. `docs/argocd.md` is gecorrigeerd.
+
+Praktisch gevolg is klein — Redis is hier puur cache, dus een herstart kost
+hoogstens een koude cache en geen data. Maar het verschuift wél waar je op let.
+
+### RBAC gaat omlaag, niet omhoog
+
+De `applicationset-controller` levert rechten **in**:
+
+- weg: `deployments` get/list/watch (`apps` én `extensions`), `configmaps`
+  create/delete/patch/update, en cluster-wijde `leases`
+  delete/get/list/patch/update/watch;
+- erbij: alleen `leases` create/get/update, **beperkt tot één resourceName**
+  (`58ac56fa.applicationsets.argoproj.io`) voor leader-election.
+
+Een brede lease-permissie wordt dus vervangen door één benoemde lease. De ruwe
+`kubectl diff` ziet er door herordening van de rules-lijst rommeliger uit dan de
+wijziging werkelijk is; bovenstaande komt uit een genormaliseerde
+voor/na-vergelijking van de live ClusterRole tegen de render.
+
+### Verificatie
+
+`scripts/verify.sh` groen (31 bestanden yaml-parse, kubeconform 13/13, 
+doc-assertion OK). Het gevendorde bestand is byte-identiek aan de kopie waarmee
+de voorbereiding is gedaan (sha256 `1097a8e8…`). Sync door een mens.
+
+## 2026-08-03 — Argo CD v3.0.6 → v3.1.16 (stap 1 van 4)
+
+Eerste stap van de reeks naar v3.4.6, één minor per keer (besluit Mark
+2026-08-03): **v3.1.16 → v3.2.12 → v3.3.13 → v3.4.6**. Upstream adviseert dat,
+en de diff van het vendored bestand ís hier de review — vier minors in één diff
+is niet te reviewen en bij een probleem niet te bisecten.
+
+- `argocd/upstream/install-v3.1.16.yaml` vervangt `install-v3.0.6.yaml`;
+  `argocd/kustomization.yaml` en `docs/argocd.md` wijzen mee.
+- `docs/argocd.md`: de lopende reeks en de per-stap-bevindingen vastgelegd, zodat
+  stap 2-4 niet opnieuw hoeven te worden uitgezocht.
+
+### Wat deze stap in het cluster doet (vooraf doorgerekend)
+
+`kubectl diff -k argocd`: **720 regels over 16 objecten** — 3 CRD's, 6
+Deployments, 1 StatefulSet, 6 NetworkPolicies.
+
+- Images: argocd `v3.0.6` → `v3.1.16`, dex `v2.41.1` → **`v2.43.0`**, redis
+  `redis:7.2.7-alpine` → **`public.ecr.aws/docker/library/redis:7.2.11-alpine`**.
+- De NetworkPolicies krijgen **alleen labels**, geen regelwijzigingen — dus geen
+  connectiviteitsrisico.
+- Alle nieuwe env-vars verwijzen naar `argocd-cmd-params-cm` met
+  `optional: true`. Die ConfigMap patchen wij niet, dus het zijn no-ops en de
+  upstream-defaults blijven gelden.
+
+### Twee aandachtspunten bij de sync
+
+- **SSO verifiëren ná deze sync.** Dex gaat hier al van 2.41.1 naar 2.43.0 — niet
+  pas in de laatste stap, zoals eerst gedacht. Met `admin.enabled: "false"`
+  betekent kapotte Dex géén UI; herstel loopt via kubectl break-glass.
+- **Nieuwe registry.** Dit cluster pulde nog nooit van `public.ecr.aws`
+  (geverifieerd: alleen docker.io, registry.k8s.io, quay.io,
+  europe-docker.pkg.dev, ghcr.io, codeberg.org). Beide benodigde tags zijn
+  anoniem bereikbaar (HTTP 200) en geen admission-policy beperkt registries, dus
+  het restrisico is een pull-fout — direct zichtbaar als `ImagePullBackOff`.
+  Upstream deed deze verhuizing juist om Docker Hub-rate-limits te ontlopen, wat
+  voor deze anoniem pullende fleet gunstig is.
+
+### Verificatie
+
+`scripts/verify.sh` groen (31 bestanden yaml-parse, kubeconform 13/13 valid,
+doc-assertion OK). De eigen patches botsen niet: `argocd-cm`, `argocd-rbac-cm` en
+`argocd-ssh-known-hosts-cm` zijn upstream identiek in alle vier de releases. Het
+gevendorde bestand is byte-identiek aan de kopie waarmee de droogloop is gedaan
+(sha256 `e2f69ec0…`), dus die analyse geldt letterlijk voor deze commit.
+
+Sync door een mens, handmatig — de Application heeft bewust geen
+automated/selfHeal.
+
 ## 2026-08-03 — pre-commit-hookbron naar GitHub
 - `.pre-commit-config.yaml`: de techbook-hook komt van
   `github.com/ConductionNL/techbook` in plaats van `codeberg.org`. De pin
