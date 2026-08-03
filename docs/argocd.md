@@ -12,7 +12,7 @@ het cluster-toegangsmechanisme onbeheerde clusterstate.
 
 ## Opzet
 
-- `argocd/upstream/install-v3.1.16.yaml` — de kale upstream-manifests,
+- `argocd/upstream/install-v3.2.12.yaml` — de kale upstream-manifests,
   gepind en **vendored** (hermetisch: renderen vergt geen egress, en een
   upgrade is één vervangen bestand met reviewbare diff).
 - `argocd/patches/` — het volledige eigen delta op upstream:
@@ -85,6 +85,11 @@ Diff-omvang per stap (regels in het vendored bestand): 192 → 250 → **6466** 
 321. Stap 3 is de zware review; die groei is de ApplicationSet-CRD die de
 client-side-apply-limiet overschrijdt.
 
+**Stand van de reeks:** stap 1 (v3.1.16) is op 2026-08-03 gesynct en groen —
+alle componenten Ready, app Synced/Healthy, SSO werkte, en het cluster bleek
+van `public.ecr.aws` te kunnen pullen (daarvóór onbekend). Stap 2 (v3.2.12)
+staat klaar.
+
 Wat per stap is uitgezocht en niet opnieuw hoeft:
 
 - **De eigen patches botsen niet.** `argocd-cm`, `argocd-rbac-cm` en
@@ -93,16 +98,30 @@ Wat per stap is uitgezocht en niet opnieuw hoeft:
   2.43.0 → 2.45.0 in stap 4. Omdat `admin.enabled: "false"` staat, betekent een
   kapotte Dex géén UI. **Verifieer de SSO-login dus na stap 1 én na stap 4**,
   niet alleen aan het eind.
-- **Redis verhuist van registry.** `redis:7.2.7-alpine` (Docker Hub) wordt
-  `public.ecr.aws/docker/library/redis:7.2.11-alpine` in stap 1 en `8.2.3-alpine`
-  in stap 4. Upstream deed dit om Docker Hub-rate-limits te ontlopen — gunstig
-  voor deze fleet, die anoniem pullt. Maar dit cluster pulde nog nooit van
-  `public.ecr.aws`. Beide tags zijn anoniem bereikbaar (HTTP 200) en er is geen
-  admission-policy die registries beperkt, dus het restrisico is een pull-fout
-  bij de sync: direct zichtbaar als `ImagePullBackOff`. Knelt het, dan is de
-  uitweg de bestaande regsync-mirror in `cluster-config/mirror/regsync.yaml`
-  (die mirrort al `docker.io/library/redis`) — maar dat vergt een image-patch,
-  en dat is een nieuw soort delta in `argocd/patches/`.
+- **Redis: eerst een andere registry, dan een major.** `redis:7.2.7-alpine`
+  (Docker Hub) wordt `public.ecr.aws/docker/library/redis:7.2.11-alpine` in
+  stap 1, **`8.2.2-alpine` in stap 2** en `8.2.3-alpine` in stap 4. De
+  major-sprong 7.2 → 8.2 zit dus in **stap 2**, niet in stap 4 zoals bij het
+  plannen eerst werd aangenomen (de eerste inventarisatie miste het doordat het
+  registry-pad wijzigde). Redis is hier puur cache, dus een herstart kost
+  hoogstens een koude cache — geen dataverlies.
+  De registry-verhuizing deed upstream om Docker Hub-rate-limits te ontlopen,
+  gunstig voor deze anoniem pullende fleet. Bij stap 1 is bewezen dat het
+  cluster van `public.ecr.aws` kan pullen; dat was daarvóór onbekend. Knelt het
+  ooit, dan is de uitweg de bestaande regsync-mirror in
+  `cluster-config/mirror/regsync.yaml` (die mirrort al
+  `docker.io/library/redis`) — maar dat vergt een image-patch, en dat is een
+  nieuw soort delta in `argocd/patches/`.
+- **Dex bumpt niet in stap 2 of 3** (blijft 2.43.0). De SSO-controle is dus
+  alleen na stap 1 en stap 4 kritisch.
+- **Stap 2 verlaagt de RBAC van de applicationset-controller.** Netto weg:
+  `deployments` get/list/watch (apps én extensions), `configmaps`
+  create/delete/patch/update, en cluster-wijde `leases`
+  delete/get/list/patch/update/watch. Erbij: alleen `leases` create/get/update
+  **beperkt tot één resourceName** (`58ac56fa.applicationsets.argoproj.io`) voor
+  leader-election. Een brede lease-permissie wordt dus vervangen door één
+  benoemde lease — een verbetering, geen risico. De ruwe `kubectl diff` ziet er
+  door herordening rommeliger uit dan de wijziging is.
 - **3.2→3.3 eist ServerSideApply.** Dat staat al in
   `argo/applications/argocd.yaml`, en de live `applicationsets`-CRD heeft alleen
   de field managers `argocd-controller` en `kube-apiserver` — geen

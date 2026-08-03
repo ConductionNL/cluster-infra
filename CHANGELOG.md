@@ -1,5 +1,59 @@
 # Changelog
 
+## 2026-08-03 — Argo CD v3.1.16 → v3.2.12 (stap 2 van 4)
+
+Stap 1 is gesynct en groen: alle componenten op v3.1.16 en Ready, app
+Synced/Healthy op `9b0811c`, SSO werkte, en `argocd-redis` pullde met succes van
+`public.ecr.aws` — daarmee is de onbekende uit stap 1 (nieuwe registry) opgelost
+bewijs geworden voor de rest van de reeks.
+
+- `argocd/upstream/install-v3.2.12.yaml` vervangt `install-v3.1.16.yaml`;
+  `argocd/kustomization.yaml` en `docs/argocd.md` wijzen mee.
+
+### Wat deze stap in het cluster doet (vooraf doorgerekend)
+
+`kubectl diff -k argocd`: **943 regels over 11 objecten** — 6 Deployments, 1
+StatefulSet, 2 CRD's, 1 ClusterRole, 1 Role.
+
+- Images: argocd `v3.1.16` → `v3.2.12`, redis `7.2.11-alpine` →
+  **`8.2.2-alpine`**. **Dex blijft `v2.43.0`** — geen SSO-risico in deze stap.
+- Alle overige workload-wijzigingen zijn nieuwe env-vars en één configMap-volume,
+  allemaal naar `argocd-cmd-params-cm`. Die ConfigMap bestaat, wordt door upstream
+  meegeleverd, en het volume staat op `optional: true` — dus geen risico dat een
+  pod niet start.
+
+### Correctie op de eerdere planning: Redis 8.x zit hier, niet in stap 4
+
+Bij het plannen is gemeld dat Redis pas in stap 4 naar 8.x zou gaan. Dat was
+fout: de major-sprong **7.2 → 8.2 gebeurt in deze stap**. De eerste
+inventarisatie miste het doordat het registry-pad van `redis:` naar
+`public.ecr.aws/docker/library/redis:` wijzigde en het grep-patroon daar niet op
+matchte. `docs/argocd.md` is gecorrigeerd.
+
+Praktisch gevolg is klein — Redis is hier puur cache, dus een herstart kost
+hoogstens een koude cache en geen data. Maar het verschuift wél waar je op let.
+
+### RBAC gaat omlaag, niet omhoog
+
+De `applicationset-controller` levert rechten **in**:
+
+- weg: `deployments` get/list/watch (`apps` én `extensions`), `configmaps`
+  create/delete/patch/update, en cluster-wijde `leases`
+  delete/get/list/patch/update/watch;
+- erbij: alleen `leases` create/get/update, **beperkt tot één resourceName**
+  (`58ac56fa.applicationsets.argoproj.io`) voor leader-election.
+
+Een brede lease-permissie wordt dus vervangen door één benoemde lease. De ruwe
+`kubectl diff` ziet er door herordening van de rules-lijst rommeliger uit dan de
+wijziging werkelijk is; bovenstaande komt uit een genormaliseerde
+voor/na-vergelijking van de live ClusterRole tegen de render.
+
+### Verificatie
+
+`scripts/verify.sh` groen (31 bestanden yaml-parse, kubeconform 13/13, 
+doc-assertion OK). Het gevendorde bestand is byte-identiek aan de kopie waarmee
+de voorbereiding is gedaan (sha256 `1097a8e8…`). Sync door een mens.
+
 ## 2026-08-03 — Argo CD v3.0.6 → v3.1.16 (stap 1 van 4)
 
 Eerste stap van de reeks naar v3.4.6, één minor per keer (besluit Mark
