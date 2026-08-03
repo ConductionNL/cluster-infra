@@ -12,7 +12,7 @@ het cluster-toegangsmechanisme onbeheerde clusterstate.
 
 ## Opzet
 
-- `argocd/upstream/install-v3.2.12.yaml` — de kale upstream-manifests,
+- `argocd/upstream/install-v3.4.6.yaml` — de kale upstream-manifests,
   gepind en **vendored** (hermetisch: renderen vergt geen egress, en een
   upgrade is één vervangen bestand met reviewbare diff).
 - `argocd/patches/` — het volledige eigen delta op upstream:
@@ -75,46 +75,76 @@ herstelde upstream-labels op argocd-rbac-cm). Volgorde:
 
 ### Lopende reeks naar v3.4.6 (besluit 2026-08-03)
 
-Van v3.0.6 naar v3.4.6 in **vier stappen**, één minor per keer: **v3.1.16 →
-v3.2.12 → v3.3.13 → v3.4.6**. Upstream adviseert één minor per keer, en de
-diff van het vendored bestand ís hier de review — vier minors in één diff is
-niet te reviewen en bij een probleem niet te bisecten. Elke stap is los terug
-te rollen via break-glass vanaf de vorige commit.
+Van v3.0.6 naar v3.4.6, één minor per keer: de diff van het vendored bestand
+ís hier de review, dus meerdere minors in één diff is niet te reviewen en bij
+een probleem niet te bisecten. Elke stap is los terug te rollen via break-glass
+vanaf de vorige commit.
 
-Diff-omvang per stap (regels in het vendored bestand): 192 → 250 → **6466** →
-321. Stap 3 is de zware review; die groei is de ApplicationSet-CRD die de
-client-side-apply-limiet overschrijdt.
+Opgezet als vier stappen (v3.1.16 → v3.2.12 → v3.3.13 → v3.4.6), uitgevoerd
+als **drie**: de 3.3-stap is overgeslagen. Reden hieronder.
 
-**Stand van de reeks:** stap 1 (v3.1.16) is op 2026-08-03 gesynct en groen —
-alle componenten Ready, app Synced/Healthy, SSO werkte, en het cluster bleek
-van `public.ecr.aws` te kunnen pullen (daarvóór onbekend). Stap 2 (v3.2.12)
-staat klaar.
+**Stand van de reeks (2026-08-03):**
+
+| Stap | Versie | Status |
+|---|---|---|
+| 1 | v3.1.16 | gesynct, groen — SSO werkte, en het cluster bleek van `public.ecr.aws` te kunnen pullen (daarvóór onbekend) |
+| 2 | v3.2.12 | gesynct, groen — redis-major 7.2 → 8.2 zonder problemen |
+| — | v3.3.x | **overgeslagen**, zie hieronder |
+| 3 | v3.4.6 | staat klaar |
+
+### Waarom 3.3 is overgeslagen
+
+**v3.3.13 bevat een upstream-fout in de install-manifests:** de
+`argocd-repo-server`-Deployment mount `argocd-cmd-params-cm` als volume, maar
+declareert dat volume niet. `kubectl diff -k argocd` faalt daarop hard:
+
+    The Deployment "argocd-repo-server" is invalid:
+    spec.template.spec.containers[0].volumeMounts[8].name:
+    Not found: "argocd-cmd-params-cm"
+
+Uitgezocht per patchrelease: v3.3.0 t/m **v3.3.12 zijn goed**, alleen v3.3.13
+is kapot; in v3.4.6 staat het volume er weer wél. Twee uitwegen waren mogelijk
+— naar v3.3.12 als tussenstap, of direct door naar v3.4.6. Gekozen voor
+**direct naar v3.4.6** (besluit Mark): v3.3.12 zou een wegwerp-tussenstap zijn
+op een release waar we niet blijven.
+
+Wat je daarmee opgeeft is de bisect-mogelijkheid — de 3.3- en 3.4-wijzigingen
+landen nu in één sync. Dat weegt hier licht, omdat de twee risico's aan hun
+symptoom te onderscheiden zijn: de ApplicationSet-CRD-wijziging kan geen
+SSO-storing geven, en Dex kan geen CRD-fout geven. Gaat de gecombineerde sync
+mis, dan is **v3.3.12 nog steeds de bruikbare tussenstap**.
+
+Les voor volgende keer: controleer bij een vendored upstream-manifest niet
+alleen of het rendert, maar of elke `volumeMount` een bijbehorend `volume`
+heeft. Een `kubectl kustomize` slaagt namelijk wél op zo'n manifest — pas
+`kubectl diff` of de apply loopt erop stuk.
 
 Wat per stap is uitgezocht en niet opnieuw hoeft:
 
 - **De eigen patches botsen niet.** `argocd-cm`, `argocd-rbac-cm` en
-  `argocd-ssh-known-hosts-cm` zijn upstream identiek in alle vier de releases.
-- **Dex bumpt in twee stappen, niet één.** 2.41.1 → 2.43.0 in stap 1, en
-  2.43.0 → 2.45.0 in stap 4. Omdat `admin.enabled: "false"` staat, betekent een
-  kapotte Dex géén UI. **Verifieer de SSO-login dus na stap 1 én na stap 4**,
-  niet alleen aan het eind.
+  `argocd-ssh-known-hosts-cm` zijn upstream identiek in álle betrokken
+  releases (v3.0.6 t/m v3.4.6), dus de patches passen in elke stap schoon toe.
+- **Dex bumpt in twee stappen.** 2.41.1 → 2.43.0 bij **v3.1.16**, en
+  2.43.0 → 2.45.0 bij **v3.4.6**. Bij v3.2.12 verandert Dex niet. Omdat
+  `admin.enabled: "false"` staat, betekent een kapotte Dex géén UI. **Verifieer
+  de SSO-login dus na v3.1.16 én na v3.4.6** — niet alleen aan het eind.
 - **Redis: eerst een andere registry, dan een major.** `redis:7.2.7-alpine`
-  (Docker Hub) wordt `public.ecr.aws/docker/library/redis:7.2.11-alpine` in
-  stap 1, **`8.2.2-alpine` in stap 2** en `8.2.3-alpine` in stap 4. De
-  major-sprong 7.2 → 8.2 zit dus in **stap 2**, niet in stap 4 zoals bij het
-  plannen eerst werd aangenomen (de eerste inventarisatie miste het doordat het
-  registry-pad wijzigde). Redis is hier puur cache, dus een herstart kost
-  hoogstens een koude cache — geen dataverlies.
+  (Docker Hub) wordt `public.ecr.aws/docker/library/redis:7.2.11-alpine` bij
+  **v3.1.16**, **`8.2.2-alpine` bij v3.2.12** en `8.2.3-alpine` bij **v3.4.6**.
+  De major-sprong 7.2 → 8.2 zit dus bij v3.2.12, niet aan het eind zoals bij het
+  plannen eerst werd aangenomen — de eerste inventarisatie miste dat doordat het
+  registry-pad wijzigde en een grep op `redis:` daar niet meer op matchte. Les:
+  bij een registry-verhuizing per release opnieuw uitlezen, niet één patroon
+  over alle versies. Redis is hier puur cache, dus een herstart kost hoogstens
+  een koude cache — geen dataverlies.
   De registry-verhuizing deed upstream om Docker Hub-rate-limits te ontlopen,
-  gunstig voor deze anoniem pullende fleet. Bij stap 1 is bewezen dat het
+  gunstig voor deze anoniem pullende fleet. Bij v3.1.16 is bewezen dat het
   cluster van `public.ecr.aws` kan pullen; dat was daarvóór onbekend. Knelt het
   ooit, dan is de uitweg de bestaande regsync-mirror in
   `cluster-config/mirror/regsync.yaml` (die mirrort al
   `docker.io/library/redis`) — maar dat vergt een image-patch, en dat is een
   nieuw soort delta in `argocd/patches/`.
-- **Dex bumpt niet in stap 2 of 3** (blijft 2.43.0). De SSO-controle is dus
-  alleen na stap 1 en stap 4 kritisch.
-- **Stap 2 verlaagt de RBAC van de applicationset-controller.** Netto weg:
+- **v3.2.12 verlaagt de RBAC van de applicationset-controller.** Netto weg:
   `deployments` get/list/watch (apps én extensions), `configmaps`
   create/delete/patch/update, en cluster-wijde `leases`
   delete/get/list/patch/update/watch. Erbij: alleen `leases` create/get/update
@@ -122,11 +152,14 @@ Wat per stap is uitgezocht en niet opnieuw hoeft:
   leader-election. Een brede lease-permissie wordt dus vervangen door één
   benoemde lease — een verbetering, geen risico. De ruwe `kubectl diff` ziet er
   door herordening rommeliger uit dan de wijziging is.
-- **3.2→3.3 eist ServerSideApply.** Dat staat al in
-  `argo/applications/argocd.yaml`, en de live `applicationsets`-CRD heeft alleen
-  de field managers `argocd-controller` en `kube-apiserver` — geen
-  `kubectl-client-side-apply`, geen last-applied-annotatie. Die migratie is dus
-  al schoon. Zet **niet** `ClientSideApplyMigration=false`.
+- **De 3.3-grens eist ServerSideApply, en dat is hier hard aangetoond.** De
+  `applicationsets.argoproj.io`-CRD is in v3.4.6 **373.903 bytes** — ruim boven
+  de 262.144-byte-limiet van de last-applied-annotatie, dus client-side apply
+  kán niet meer. `ServerSideApply=true` staat al in
+  `argo/applications/argocd.yaml`, en de live CRD heeft alleen de field managers
+  `argocd-controller` (Apply) en `kube-apiserver` (Update) — geen
+  `kubectl-client-side-apply` en een last-applied-annotatie van 0 bytes. Die
+  migratie is dus al schoon. Zet **niet** `ClientSideApplyMigration=false`.
 - **3.3→3.4 clusterversie-formaat** (`vMajor.Minor.Patch`) raakt alleen
   ApplicationSets met *cluster*-generators plus `auto-label-cluster-info`. De
   fleet gebruikt **git**-generators, dus niet van toepassing.

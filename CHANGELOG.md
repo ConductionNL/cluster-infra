@@ -1,5 +1,67 @@
 # Changelog
 
+## 2026-08-03 — Argo CD v3.2.12 → v3.4.6 (slotstap; 3.3 overgeslagen)
+
+Stap 2 is gesynct en groen: alles op v3.2.12 en Ready, app Synced/Healthy op
+`e3708b8`, en de redis-major 7.2 → 8.2 verliep zonder problemen.
+
+- `argocd/upstream/install-v3.4.6.yaml` vervangt `install-v3.2.12.yaml`;
+  `argocd/kustomization.yaml` en `docs/argocd.md` wijzen mee.
+
+### Waarom 3.3 is overgeslagen
+
+De geplande tussenstap **v3.3.13 bevat een upstream-fout**: de
+`argocd-repo-server`-Deployment mount `argocd-cmd-params-cm` als volume maar
+declareert dat volume niet. `kubectl diff -k argocd` faalt daarop hard met
+`The Deployment "argocd-repo-server" is invalid:
+spec.template.spec.containers[0].volumeMounts[8].name: Not found:
+"argocd-cmd-params-cm"`.
+
+Per patchrelease uitgezocht: **v3.3.0 t/m v3.3.12 zijn goed, alleen v3.3.13 is
+kapot**, en in v3.4.6 staat het volume er weer wél. Keuze was v3.3.12 als
+tussenstap of direct door; besluit Mark: **direct naar v3.4.6**, omdat v3.3.12
+een wegwerp-tussenstap zou zijn op een release waar we niet blijven.
+
+Prijs daarvan is de bisect-mogelijkheid — de 3.3- en 3.4-wijzigingen landen in
+één sync. Dat weegt licht: de twee risico's zijn aan hun symptoom te
+onderscheiden (de CRD-wijziging kan geen SSO-storing geven, Dex kan geen
+CRD-fout geven). Loopt het mis, dan blijft **v3.3.12 de bruikbare tussenstap**.
+
+### Wat deze stap in het cluster doet (vooraf doorgerekend)
+
+`kubectl diff -k argocd`: **7415 regels over 10 objecten** — 6 Deployments, 1
+StatefulSet, 3 CRD's. Geen RBAC-wijzigingen; die verlaging landde al bij v3.2.12.
+
+- Images: argocd `v3.2.12` → `v3.4.6`, dex **`v2.43.0` → `v2.45.0`**, redis
+  `8.2.2-alpine` → `8.2.3-alpine`.
+- De render is volledig gecontroleerd op volume/mount-consistentie over álle
+  workloads en containers: geen inconsistenties. Diezelfde check ving de
+  v3.3.13-fout, dus hij is nu de standaardcontrole bij een vendored manifest.
+
+### SSA hard aangetoond
+
+De `applicationsets.argoproj.io`-CRD is **373.903 bytes** — ruim boven de
+262.144-byte-limiet van de last-applied-annotatie. Client-side apply kán dus
+niet meer. Geverifieerd vóór deze stap: `ServerSideApply=true` staat in
+`argo/applications/argocd.yaml`, de live CRD heeft alleen de field managers
+`argocd-controller` (Apply) en `kube-apiserver` (Update), en de
+last-applied-annotatie is 0 bytes. De upstream-val van deze grens geldt hier
+dus niet.
+
+### Aandachtspunt bij de sync
+
+**Dex gaat naar 2.45.0** — met `admin.enabled: "false"` betekent een kapotte Dex
+géén UI, en dan is kubectl break-glass de enige weg terug. Verifieer de
+SSO-login op admin.commonground.nu direct na de sync. De
+`ContinueOnConnectorFailure`-default van 2.45 geldt ongewijzigd; er is geen
+`argocd-cmd-params-cm`-patch.
+
+### Verificatie
+
+`scripts/verify.sh` groen (31 bestanden yaml-parse, kubeconform 13/13,
+doc-assertion OK). Gevendord bestand byte-identiek aan de voorbereidingskopie
+(sha256 `752b5a26…`). Sync door een mens.
+
 ## 2026-08-03 — Argo CD v3.1.16 → v3.2.12 (stap 2 van 4)
 
 Stap 1 is gesynct en groen: alle componenten op v3.1.16 en Ready, app
