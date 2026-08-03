@@ -1,5 +1,54 @@
 # Changelog
 
+## 2026-08-03 — Argo CD v3.0.6 → v3.1.16 (stap 1 van 4)
+
+Eerste stap van de reeks naar v3.4.6, één minor per keer (besluit Mark
+2026-08-03): **v3.1.16 → v3.2.12 → v3.3.13 → v3.4.6**. Upstream adviseert dat,
+en de diff van het vendored bestand ís hier de review — vier minors in één diff
+is niet te reviewen en bij een probleem niet te bisecten.
+
+- `argocd/upstream/install-v3.1.16.yaml` vervangt `install-v3.0.6.yaml`;
+  `argocd/kustomization.yaml` en `docs/argocd.md` wijzen mee.
+- `docs/argocd.md`: de lopende reeks en de per-stap-bevindingen vastgelegd, zodat
+  stap 2-4 niet opnieuw hoeven te worden uitgezocht.
+
+### Wat deze stap in het cluster doet (vooraf doorgerekend)
+
+`kubectl diff -k argocd`: **720 regels over 16 objecten** — 3 CRD's, 6
+Deployments, 1 StatefulSet, 6 NetworkPolicies.
+
+- Images: argocd `v3.0.6` → `v3.1.16`, dex `v2.41.1` → **`v2.43.0`**, redis
+  `redis:7.2.7-alpine` → **`public.ecr.aws/docker/library/redis:7.2.11-alpine`**.
+- De NetworkPolicies krijgen **alleen labels**, geen regelwijzigingen — dus geen
+  connectiviteitsrisico.
+- Alle nieuwe env-vars verwijzen naar `argocd-cmd-params-cm` met
+  `optional: true`. Die ConfigMap patchen wij niet, dus het zijn no-ops en de
+  upstream-defaults blijven gelden.
+
+### Twee aandachtspunten bij de sync
+
+- **SSO verifiëren ná deze sync.** Dex gaat hier al van 2.41.1 naar 2.43.0 — niet
+  pas in de laatste stap, zoals eerst gedacht. Met `admin.enabled: "false"`
+  betekent kapotte Dex géén UI; herstel loopt via kubectl break-glass.
+- **Nieuwe registry.** Dit cluster pulde nog nooit van `public.ecr.aws`
+  (geverifieerd: alleen docker.io, registry.k8s.io, quay.io,
+  europe-docker.pkg.dev, ghcr.io, codeberg.org). Beide benodigde tags zijn
+  anoniem bereikbaar (HTTP 200) en geen admission-policy beperkt registries, dus
+  het restrisico is een pull-fout — direct zichtbaar als `ImagePullBackOff`.
+  Upstream deed deze verhuizing juist om Docker Hub-rate-limits te ontlopen, wat
+  voor deze anoniem pullende fleet gunstig is.
+
+### Verificatie
+
+`scripts/verify.sh` groen (31 bestanden yaml-parse, kubeconform 13/13 valid,
+doc-assertion OK). De eigen patches botsen niet: `argocd-cm`, `argocd-rbac-cm` en
+`argocd-ssh-known-hosts-cm` zijn upstream identiek in alle vier de releases. Het
+gevendorde bestand is byte-identiek aan de kopie waarmee de droogloop is gedaan
+(sha256 `e2f69ec0…`), dus die analyse geldt letterlijk voor deze commit.
+
+Sync door een mens, handmatig — de Application heeft bewust geen
+automated/selfHeal.
+
 ## 2026-07-13 — eigenaarschap → info@conduction.nl (review WP8)
 - Alle `owner:`-front-matter en CODEOWNERS omgezet van `mark` naar
   `info@conduction.nl` (opvolging na 2026-08-31). Voorbereid op branch
