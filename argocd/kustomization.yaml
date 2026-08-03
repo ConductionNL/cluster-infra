@@ -11,7 +11,7 @@ kind: Kustomization
 namespace: argocd
 
 resources:
-  - upstream/install-v3.1.16.yaml
+  - upstream/install-v3.2.12.yaml
   - resources/namespace.yaml
   - resources/ingress.yaml
   - resources/credential-refresh/serviceaccount.yaml
