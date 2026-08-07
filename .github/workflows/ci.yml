@@ -1,0 +1,81 @@
+# SPDX-License-Identifier: EUPL-1.2
+#
+# Servergate op elke PR en elke push naar main.
+#
+# Tot nu toe was de enige gate op deze repo de lokale pre-commit-hooks van de
+# operator. Dat werkt tot de eerste die `pre-commit install` niet heeft
+# gedraaid, en het werkt sowieso niet tegen `git commit --no-verify`. Voor
+# gitleaks is dat het verschil tussen een controle en een gewoonte.
+#
+# Deze workflow implementeert de checks NIET opnieuw. Hij draait dezelfde
+# `.pre-commit-config.yaml` die de operator draait, want een tweede lijst
+# checks is een tweede lijst die uit de pas gaat lopen. Eén config, twee
+# plekken die hem draaien. Zelfde patroon als openwoo-app-config.
+#
+# `--hook-stage pre-push` is verplicht: de `verify`-hook is als
+# `stages: [pre-push]` gedeclareerd en draait zonder die vlag stilzwijgend
+# niet — wat een groene CI betekenisloos zou maken.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Een nieuwere push vervangt een lopende run op dezelfde ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Deze job leest alleen. Expliciet, zodat een toekomstige stap niet
+# stilzwijgend de repo-standaardrechten erft.
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks leest de werkboom, maar volledige historie houdt
+          # git log-gebaseerde checks eerlijk als die er ooit bij komen.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installeer wat de hooks nodig hebben
+        # PyYAML: scripts/verify.sh parseert elke *.yaml in de repo.
+        # uv: techbook's docs-contract-hook shelt eruit ("Python tooling via
+        # uv, never pip directly" — techbook/openspec/project.md) en faalt
+        # anders met "Executable `uv` not found".
+        run: |
+          python -m pip install --upgrade pip
+          pip install pre-commit uv PyYAML
+
+      - name: Installeer kubectl en kubeconform
+        # Beide vast geprikt en met checksum, niet via een third-party action:
+        # dit is een security-gate, dus de toolchain eromheen moet zelf ook
+        # controleerbaar zijn. kubeconform staat op de versie die de operator
+        # lokaal draait (v0.7.0) — een andere versie geeft andere uitkomsten
+        # en dan gate je op iets anders dan wat lokaal is getest.
+        env:
+          KUBECTL_VERSION: v1.35.1
+          KUBECONFORM_VERSION: v0.7.0
+          KUBECONFORM_SHA256: c31518ddd122663b3f3aa874cfe8178cb0988de944f29c74a0b9260920d115d3
+        run: |
+          set -euo pipefail
+          curl -fsSLO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          curl -fsSLO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256"
+          echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check --status
+          install -m 0755 kubectl /usr/local/bin/kubectl
+
+          curl -fsSLO "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  kubeconform-linux-amd64.tar.gz" | sha256sum --check --status
+          tar -xzf kubeconform-linux-amd64.tar.gz kubeconform
+          install -m 0755 kubeconform /usr/local/bin/kubeconform
+
+      - name: Draai dezelfde hooks als de operator
+        run: pre-commit run --all-files --show-diff-on-failure --hook-stage pre-push
