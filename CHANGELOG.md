@@ -68,6 +68,36 @@ meerdere mensen met rechten op het project, dus die break-glass hangt niet aan
 Openstaand, buiten deze repo: `mcc` laten ophouden met het patchen van
 platformsecrets met een persoonlijke identiteit. Zolang dat draait, blijft een
 persoonlijk account in het pad zitten en verbergt het of de CronJob werkt.
+## 2026-08-07 — servergate op de pre-commit-hooks; techbook-hooks van GitHub
+
+### Aanleiding
+
+Een security-sweep over de infra-repos liet zien dat gitleaks hier alleen in
+`.pre-commit-config.yaml` stond. Dat is een lokale controle: hij mist iedereen
+die `pre-commit install` niet heeft gedraaid, en `--no-verify` zet hem uit.
+GitHub's secret scanning vangt het daarna wel op deze repo (aan, nul alerts),
+maar dat is detectie ná de push, niet preventie ervoor.
+
+### Toegevoegd
+
+- `.github/workflows/ci.yml` — draait op elke PR en elke push naar `main`
+  exact dezelfde `.pre-commit-config.yaml` als de operator, met
+  `--hook-stage pre-push` zodat de `verify`-hook meegaat. Geen tweede lijst
+  checks; één config, twee plekken die hem draaien. Zelfde patroon als
+  `openwoo-app-config`. `kubectl` en `kubeconform` worden vast geprikt en op
+  sha256 gecontroleerd geïnstalleerd; kubeconform staat bewust op v0.7.0,
+  de versie die de operator lokaal draait.
+
+### Gewijzigd
+
+- `.pre-commit-config.yaml` haalt de techbook-hooks nu van
+  `github.com/ConductionNL/techbook` in plaats van
+  `codeberg.org/Conduction/techbook`. Dezelfde `rev` (`edf269e`) bestaat daar
+  — de hashes zijn bij de migratie behouden — dus dit is een exacte
+  omzetting, geen versiesprong. Zonder deze wijziging zou de nieuwe CI de
+  hooks bij elke run van de oude trust root trekken.
+- `docs/agents.md` — de regel "Push: gates draaien bij de mens" klopte niet
+  meer nu ze ook serverside draaien.
 
 ## 2026-08-03 — Argo CD v3.2.12 → v3.4.6 (slotstap; 3.3 overgeslagen)
 
