@@ -1,5 +1,73 @@
 # Changelog
 
+## 2026-08-10 — credential-refresh: verlopen Gardener-token, logretentie en docs
+
+De CronJob `argocd-credential-refresh` faalde om 12:00 UTC
+(`argocd-credential-refresh-29772720`, `BackoffLimitExceeded`). Oorzaak: het
+service-account-token in bootstrap-secret `gardener-sa-kubeconfig` was
+verlopen — `sub` `system:serviceaccount:garden-wh2mnkj:argocd-automation`,
+`iat` 2026-05-12T07:14:20Z, `exp` **2026-08-10T07:14:20Z** (90 dagen). De run
+van 00:00 UTC slaagde nog. Het service-account zelf was in orde; alleen het
+token moest geroteerd worden.
+
+Argo CD bleef ondertussen werken, maar niet dankzij de CronJob: de drie
+`cluster-api.*`-secrets bevatten certificaten met subject
+`…:garden-wh2mnkj:mark-conduction`, geschreven door `mcc login` via de
+user-systemd-timer `mcc-login.timer` op een werkstation. Dat vangnet loopt op
+een persoonlijke identiteit, op één machine, met ongeveer een minuut marge
+tussen certverval (03:00 UTC) en de volgende timerrun (03:00 UTC).
+
+### Herstel
+
+Geroteerd op 2026-08-10: het nieuwe token voor `argocd-automation` heeft `exp`
+**2026-11-08T12:58:32Z** (volledige 90 dagen). Na een handmatige run staan de
+drie `cluster-api.*`-secrets weer op subject `…:argocd-automation` met
+`notAfter` van +24 uur; het CronJob-pad draait dus weer op eigen benen.
+
+### Zelfverlenging, zodat er geen persoonlijk account meer in het pad zit
+
+- `argocd/resources/credential-refresh/configmap.yaml`: `refresh.sh` verlengt
+  aan het begin van elke run zijn eigen Gardener-token. Het leest de
+  `exp`-claim uit het gemounte kubeconfig en mint bij minder dan
+  `RENEW_BEFORE_DAYS` resterend een opvolger van `TOKEN_DURATION`, waarna het
+  `gardener-sa-kubeconfig` patcht. Dat mag zonder RBAC-wijziging: de Role hier
+  had `patch`/`update` op dat secret al, en het service-account heeft `create`
+  op `serviceaccounts/token` in `garden-wh2mnkj` (`auth can-i` → `yes`).
+  Beide externe calls zijn afgevangen; mislukken ze, dan logt de job een
+  waarschuwing en gaat door met het nog geldige token — een mislukte
+  verlenging mag de credential-refresh zelf niet omvergooien.
+- Hetzelfde bestand is omgezet van een geëscapete YAML-regel naar een
+  block-scalar. Reden: een blok van 25 regels toevoegen aan een one-liner van
+  60 regels shell is niet te reviewen, en in deze repo *is* de diff de review.
+  Inhoudelijk is er niets aan het bestaande script gewijzigd — gecontroleerd
+  door de gerenderde `refresh.sh` vóór en ná te diffen (alleen toevoegingen).
+  Het resultaat is door `bash -n` en `shellcheck` gehaald.
+- `argocd/resources/credential-refresh/cronjob.yaml`: `GARDENER_SA`,
+  `RENEW_BEFORE_DAYS` (30) en `TOKEN_DURATION` (2160h = 90d, het
+  Gardener-maximum) als expliciete `env` op de container, zodat de drempels
+  zichtbaar en te draaien zijn zonder de ConfigMap te lezen.
+
+Grens van dit mechanisme, vastgelegd in de docs: ligt de CronJob langer dan
+`TOKEN_DURATION` stil, dan is handmatige rotatie alsnog nodig. Cyso heeft
+meerdere mensen met rechten op het project, dus die break-glass hangt niet aan
+één persoon.
+
+### Overige wijzigingen
+
+- `argocd/resources/credential-refresh/cronjob.yaml`: `restartPolicy`
+  `OnFailure` → `Never`. Bij `OnFailure` ruimt de job-controller de pod op
+  zodra `backoffLimit` is bereikt, waardoor de logs van déze storing niet meer
+  op te vragen waren. Met `Never` blijven falende pods staan tot
+  `failedJobsHistoryLimit` ze opruimt.
+- `docs/argocd.md`: nieuwe § Credential-refresh met de zelfverlenging en haar
+  drempels, handmatige rotatie als break-glass, de commando's om expiry en
+  certsubject te controleren zonder credentials te tonen, en het tweede
+  refresh-pad als gedocumenteerd vangnet (géén ontwerp). De alerting-regel is
+  niet langer een opvolgpunt maar verwijst naar de monitoring-repo.
+
+Openstaand, buiten deze repo: `mcc` laten ophouden met het patchen van
+platformsecrets met een persoonlijke identiteit. Zolang dat draait, blijft een
+persoonlijk account in het pad zitten en verbergt het of de CronJob werkt.
 ## 2026-08-07 — servergate op de pre-commit-hooks; techbook-hooks van GitHub
 
 ### Aanleiding
