@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-08-03
+last_reviewed: 2026-08-10
 owner: info@conduction.nl
 ---
 
@@ -25,7 +25,10 @@ het cluster-toegangsmechanisme onbeheerde clusterstate.
   ophaalt voor de shoot-clusters (con-prod, conductionprod, test-accept)
   en ze als `cluster-api.*`-secrets schrijft. Missiekritisch: valt dit
   stil, dan verliest Argo binnen 24 uur de toegang tot alles wat het
-  beheert. (Alerting hierop: opvolgpunt in de monitoring-repo.)
+  beheert — zie § Credential-refresh hieronder voor de rotatieplicht en
+  het tweede refresh-pad. Alerting: `ArgoCDCredentialRefreshStale` en
+  `ArgoCDCredentialRefreshJobFailed` in de monitoring-repo
+  (`prometheus/rules/argocd/rules-credential-refresh.yaml`).
 - `argo/applications/argocd.yaml` — de Application die dit pad beheert.
   Bewust zonder automated/prune/selfHeal: elke wijziging aan Argo zelf
   is een handmatige, reviewde sync.
@@ -39,11 +42,111 @@ aangemaakt:
 | Secret | Inhoud | Gebruikt door |
 |---|---|---|
 | `argocd-oidc-keycloak` | key `clientSecret` (Keycloak-client `argocd`); label `app.kubernetes.io/part-of: argocd` verplicht | `argocd-cm` via `$argocd-oidc-keycloak:clientSecret` |
-| `gardener-sa-kubeconfig` | Gardener-service-account-kubeconfig | credential-refresh-CronJob |
+| `gardener-sa-kubeconfig` | Gardener-service-account-kubeconfig voor `argocd-automation` in project `garden-wh2mnkj`; het token daarin verloopt na 90 dagen en moet handmatig worden geroteerd — zie § Credential-refresh | credential-refresh-CronJob |
 | `nextcloud-repo-key`, `react-base-repo` | repo-credentials | Argo repo-server |
 
 `cluster-api.*`-secrets zijn runtime-artefacten van de CronJob en horen
 níét in git of in deze lijst. `argocd-server-tls` komt van cert-manager.
+
+## Credential-refresh: tokenrotatie en het tweede pad
+
+### Het token verloopt na 90 dagen, en verlengt zichzelf
+
+De CronJob authenticeert bij de Gardener-API als service-account
+`argocd-automation` in projectnamespace `garden-wh2mnkj`. Het token in
+`gardener-sa-kubeconfig` is een gewoon Kubernetes-service-account-token;
+Gardener geeft maximaal **90 dagen** uit (`maxTokenExpiration` ligt in het
+bereik 30–90 dagen). Verloopt het, dan faalt de CronJob en teren de
+`cluster-api.*`-secrets nog maximaal 24 uur op hun laatste certificaat.
+
+Dit is op **2026-08-10** misgegaan. Het token had `iat`
+2026-05-12T07:14:20Z en `exp` 2026-08-10T07:14:20Z; de run van 00:00 UTC
+slaagde nog, die van 12:00 UTC faalde met `BackoffLimitExceeded`.
+
+**Sindsdien verlengt de job zijn eigen token.** Aan het begin van elke run
+leest `refresh.sh` de `exp`-claim uit het gemounte kubeconfig; is er minder
+dan `RENEW_BEFORE_DAYS` over, dan mint hij met het nog geldige token een
+opvolger van `TOKEN_DURATION` en patcht `gardener-sa-kubeconfig`. Dat mag:
+het service-account heeft `create` op `serviceaccounts/token` in de
+projectnamespace (`kubectl auth can-i create serviceaccounts/token` geeft
+`yes`). Beide externe calls zijn afgevangen — mislukt de verlenging, dan
+logt de job een waarschuwing en gaat door met het huidige token, dat dan
+nog dagen geldig is.
+
+| Env-var | Default | Betekenis |
+|---|---|---|
+| `GARDENER_SA` | `argocd-automation` | het service-account waarvoor gemint wordt |
+| `RENEW_BEFORE_DAYS` | `30` | verleng zodra er minder dan zoveel dagen resteren |
+| `TOKEN_DURATION` | `2160h` | gevraagde looptijd (90 dagen = het Gardener-maximum) |
+
+Met een 12-uursschedule en een drempel van 30 dagen zijn er ongeveer 60
+kansen om te slagen voordat het knelt. De grens van dit mechanisme: staat
+de CronJob langer dan `TOKEN_DURATION` stil, dan is de keten alsnog dood
+en is handmatige rotatie nodig (zie hieronder). `ArgoCDCredentialRefreshStale`
+in de monitoring-repo meldt stilstand binnen 14 uur.
+
+De expiry uitlezen zonder het token te tonen:
+
+    kubectl -n argocd get secret gardener-sa-kubeconfig \
+      -o jsonpath='{.data.kubeconfig}' | base64 -d \
+      | yq -r '.users[0].user.token' \
+      | cut -d. -f2 | tr '_-' '/+' | base64 -d | jq '{sub, exp: (.exp|todate)}'
+
+### Handmatig roteren (break-glass; het secret staat niet in git)
+
+Alleen nodig als de zelfverlenging het niet heeft gered — in de praktijk:
+de CronJob heeft langer dan `TOKEN_DURATION` stilgelegen. Vraag anders eerst
+af waarom de job niet aan verlengen toekwam; het token opnieuw met de hand
+zetten verbergt dat.
+
+1. Vers token minten tegen de garden-API (`api.emk.fuga.cloud`, namespace
+   `garden-wh2mnkj`) — via het Gardener/Fuga-dashboard, of met een
+   garden-credential:
+   `kubectl -n garden-wh2mnkj create token argocd-automation --duration=2160h`.
+   Controleer de `exp` van het resultaat: de garden-API kan de duur
+   afkappen.
+2. In het bestaande kubeconfig uitsluitend `.users[0].user.token`
+   vervangen — server (`https://api.emk.fuga.cloud/`), namespace en CA
+   blijven gelijk — en het secret patchen met `--patch-file`. Het token
+   nooit als commandline-argument meegeven; ruim het tijdelijke bestand op.
+3. Direct verifiëren met een handmatige run:
+   `kubectl -n argocd create job --from=cronjob/argocd-credential-refresh argocd-credential-refresh-manual-<datum>`
+   De job moet `Complete` worden, en het client-certificaat in de drie
+   `cluster-api.*`-secrets moet subject
+   `…:garden-wh2mnkj:argocd-automation` hebben met een `notAfter` van
+   ongeveer nu + 24 uur.
+
+Het certsubject controleren (het certificaat is publiek materiaal):
+
+    kubectl -n argocd get secret cluster-api.con-prod.wh2mnkj.shoot.emk.fuga.cloud-1423932151 \
+      -o jsonpath='{.data.config}' | base64 -d \
+      | jq -r '.tlsClientConfig.certData' | base64 -d \
+      | openssl x509 -noout -subject -dates
+
+### Er is een tweede refresh-pad, en dat is een vangnet
+
+Op het werkstation van de beheerder draait een user-systemd-timer
+`mcc-login.timer` (dagelijks 05:00 CEST) die `mcc login` uitvoert. Die
+tool zet niet alleen de lokale kubeconfigs, maar schrijft óók de drie
+`cluster-api.*`-secrets in dit cluster — met de **persoonlijke**
+service-account-identiteit van de beheerder (`mark-conduction`) in plaats
+van `argocd-automation`.
+
+Daardoor bleef Argo CD op 2026-08-10 werken terwijl de CronJob al uren
+kapot was. Reken daar niet op:
+
+- het is een persoonlijke identiteit in platformstate — vertrekt die
+  persoon, dan valt het vangnet weg;
+- het pad loopt over één werkstation: staat dat uit of faalt DNS, dan is
+  er geen refresh;
+- de marge is ongeveer één minuut. De certificaten verlopen rond 03:00
+  UTC en de timer draait om 03:00 UTC.
+
+Zie je in `cluster-api.*` een certsubject dat níét `argocd-automation`
+is, dan is de CronJob dus in werkelijkheid stil — ook als Argo groen
+staat. Dat is precies het signaal om § Roteren te doorlopen. Het
+opruimen van dit tweede pad (`mcc` laat ophouden met het patchen van
+platformsecrets) is een openstaand punt buiten deze repo.
 
 ## Adoptie (fase 3 — elke stap door een mens)
 

@@ -2,31 +2,151 @@
 # refresh.sh: haalt via de Gardener-API 24u-kubeconfigs op voor de drie
 # shoot-clusters en schrijft ze als cluster-api.*-secrets. Missiekritisch:
 # zonder dit verliest Argo binnen 24u de toegang tot alle beheerde clusters.
+# Verlengt daarnaast zijn eigen Gardener-token (zie het eerste blok in het
+# script). Het script staat hier als block-scalar en niet als geëscapete
+# regel, zodat de diff leesbaar blijft — de inhoud is de review.
 apiVersion: v1
 data:
-  refresh.sh: "#!/bin/sh\nset -e\n\necho \"[$(date '+%Y-%m-%d %H:%M:%S')] Starting credential refresh\"\
-    \n\n# Config\nNAMESPACE=\"garden-wh2mnkj\"\nARGOCD_NAMESPACE=\"argocd\"\nEXPIRATION_SECONDS=86400\n\
-    \n# Setup kubeconfig voor Gardener API\nexport KUBECONFIG=/gardener-sa/kubeconfig\n\n# Clusters (shoot:secret-name)\n\
-    CLUSTERS=\"con-prod:cluster-api.con-prod.wh2mnkj.shoot.emk.fuga.cloud-1423932151\nconductionprod:cluster-api.conductionprod.wh2mnkj.shoot.emk.fuga.cloud-1749158776\n\
-    test-accept:cluster-api.test-accept.wh2mnkj.shoot.emk.fuga.cloud-3791817028\"\n\nfor entry in $CLUSTERS;\
-    \ do\n  SHOOT=$(echo $entry | cut -d: -f1)\n  SECRET=$(echo $entry | cut -d: -f2)\n  SERVER=\"api.${SHOOT}.wh2mnkj.shoot.emk.fuga.cloud\"\
-    \n  \n  echo \"[$(date '+%Y-%m-%d %H:%M:%S')] Processing: $SHOOT\"\n  \n  # Request admin kubeconfig\n\
-    \  KUBECONFIG_JSON=$(kubectl create \\\n    -f <(printf '{\"spec\":{\"expirationSeconds\":%d}}' \"\
-    $EXPIRATION_SECONDS\") \\\n    --raw \"/apis/core.gardener.cloud/v1beta1/namespaces/${NAMESPACE}/shoots/${SHOOT}/adminkubeconfig\"\
-    )\n  \n  KUBECONFIG_B64=$(echo \"$KUBECONFIG_JSON\" | jq -r '.status.kubeconfig')\n  KUBECONFIG_YAML=$(echo\
-    \ \"$KUBECONFIG_B64\" | base64 -d)\n  \n  # Extract credentials\n  CERT_DATA=$(echo \"$KUBECONFIG_YAML\"\
-    \ | yq -r '.users[0].user.\"client-certificate-data\"')\n  KEY_DATA=$(echo \"$KUBECONFIG_YAML\" |\
-    \ yq -r '.users[0].user.\"client-key-data\"')\n  CA_DATA=$(echo \"$KUBECONFIG_YAML\" | yq -r '.clusters[0].cluster.\"\
-    certificate-authority-data\"')\n  \n  # Build Argo CD config\n  CONFIG=$(cat <<EOF\n{\"tlsClientConfig\"\
-    :{\"insecure\":false,\"certData\":\"${CERT_DATA}\",\"keyData\":\"${KEY_DATA}\",\"caData\":\"${CA_DATA}\"\
-    }}\nEOF\n)\n  \n  # Update secret (switch to in-cluster kubeconfig)\n  unset KUBECONFIG\n  \n  CONFIG_B64=$(echo\
-    \ -n \"$CONFIG\" | base64 -w0)\n  SERVER_B64=$(echo -n \"https://$SERVER\" | base64 -w0)\n  \n  kubectl\
-    \ -n \"$ARGOCD_NAMESPACE\" patch secret \"$SECRET\" \\\n    --type='json' \\\n    -p=\"[{\\\"op\\\"\
-    :\\\"replace\\\",\\\"path\\\":\\\"/data/config\\\",\\\"value\\\":\\\"$CONFIG_B64\\\"},{\\\"op\\\"\
-    :\\\"replace\\\",\\\"path\\\":\\\"/data/server\\\",\\\"value\\\":\\\"$SERVER_B64\\\"}]\"\n  \n  #\
-    \ Switch back to Gardener kubeconfig for next iteration\n  export KUBECONFIG=/gardener-sa/kubeconfig\n\
-    \  \n  echo \"[$(date '+%Y-%m-%d %H:%M:%S')] Updated: $SHOOT\"\ndone\n\necho \"[$(date '+%Y-%m-%d\
-    \ %H:%M:%S')] All credentials refreshed\"\n"
+  refresh.sh: |
+    #!/bin/sh
+    set -e
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting credential refresh"
+
+    # Config
+    NAMESPACE="garden-wh2mnkj"
+    ARGOCD_NAMESPACE="argocd"
+    EXPIRATION_SECONDS=86400
+    GARDENER_SA_SECRET="gardener-sa-kubeconfig"
+
+    # Zelfverlenging: env-tunable, nooit hardcoded
+    GARDENER_SA="${GARDENER_SA:-argocd-automation}"
+    RENEW_BEFORE_DAYS="${RENEW_BEFORE_DAYS:-30}"
+    TOKEN_DURATION="${TOKEN_DURATION:-2160h}"
+
+    # Setup kubeconfig voor Gardener API
+    export KUBECONFIG=/gardener-sa/kubeconfig
+
+    # --- Eigen Gardener-token verlengen ---------------------------------
+    # Het token in gardener-sa-kubeconfig verloopt na maximaal 90 dagen
+    # (de Gardener-grens is 30-90d). Zonder verlenging valt deze job
+    # daarna stil en verliest Argo binnen 24u alle clustertoegang; dat is
+    # op 2026-08-10 gebeurd. Zolang de job draait, mint hij ruim voor de
+    # deadline zijn eigen opvolger. Dat mag: het service-account heeft
+    # create op serviceaccounts/token in de projectnamespace.
+    #
+    # Mislukt de verlenging, dan is dat géén reden de refresh over te
+    # slaan: het huidige token is dan nog RENEW_BEFORE_DAYS geldig. Beide
+    # externe calls zijn daarom afgevangen en loggen een waarschuwing.
+    PAYLOAD=$(yq -r '.users[0].user.token' /gardener-sa/kubeconfig | cut -d. -f2 | tr '_-' '/+')
+    case $(( ${#PAYLOAD} % 4 )) in
+      2) PAYLOAD="${PAYLOAD}==" ;;
+      3) PAYLOAD="${PAYLOAD}=" ;;
+    esac
+    TOKEN_EXP=$(echo "$PAYLOAD" | base64 -d | jq -r '.exp')
+    DAYS_LEFT=$(( (TOKEN_EXP - $(date '+%s')) / 86400 ))
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Gardener-token: ${DAYS_LEFT}d resterend (drempel ${RENEW_BEFORE_DAYS}d)"
+
+    if [ "$DAYS_LEFT" -lt "$RENEW_BEFORE_DAYS" ]; then
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] Token verlengen met ${TOKEN_DURATION}"
+
+      if NEW_TOKEN=$(kubectl -n "$NAMESPACE" create token "$GARDENER_SA" --duration="$TOKEN_DURATION"); then
+        # Kubeconfig opnieuw opbouwen uit de bestaande velden; alleen het
+        # token wijzigt. Bewust geen in-place YAML-edit: alleen de
+        # leesvorm van yq wordt hier gebruikt, net als hieronder.
+        SA_CONTEXT=$(yq -r '.current-context' /gardener-sa/kubeconfig)
+        SA_CLUSTER=$(yq -r '.clusters[0].name' /gardener-sa/kubeconfig)
+        SA_SERVER=$(yq -r '.clusters[0].cluster.server' /gardener-sa/kubeconfig)
+        SA_CA=$(yq -r '.clusters[0].cluster."certificate-authority-data"' /gardener-sa/kubeconfig)
+        SA_USER=$(yq -r '.users[0].name' /gardener-sa/kubeconfig)
+        SA_NS=$(yq -r '.contexts[0].context.namespace' /gardener-sa/kubeconfig)
+
+        cat > /tmp/kubeconfig.yaml <<EOF
+    apiVersion: v1
+    kind: Config
+    current-context: ${SA_CONTEXT}
+    clusters:
+    - name: ${SA_CLUSTER}
+      cluster:
+        server: ${SA_SERVER}
+        certificate-authority-data: ${SA_CA}
+    users:
+    - name: ${SA_USER}
+      user:
+        token: ${NEW_TOKEN}
+    contexts:
+    - name: ${SA_CONTEXT}
+      context:
+        cluster: ${SA_CLUSTER}
+        user: ${SA_USER}
+        namespace: ${SA_NS}
+    EOF
+
+        printf '{"data":{"kubeconfig":"%s"}}' "$(base64 -w0 /tmp/kubeconfig.yaml)" > /tmp/patch.json
+
+        unset KUBECONFIG
+        if kubectl -n "$ARGOCD_NAMESPACE" patch secret "$GARDENER_SA_SECRET" \
+          --type=merge --patch-file /tmp/patch.json; then
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] Token verlengd; deze run gebruikt nog het oude token (geldig)"
+        else
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] WAARSCHUWING: patchen van $GARDENER_SA_SECRET mislukt" >&2
+        fi
+        export KUBECONFIG=/gardener-sa/kubeconfig
+
+        rm -f /tmp/kubeconfig.yaml /tmp/patch.json
+      else
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WAARSCHUWING: minten van een nieuw token mislukt" >&2
+      fi
+    fi
+
+    # Clusters (shoot:secret-name)
+    CLUSTERS="con-prod:cluster-api.con-prod.wh2mnkj.shoot.emk.fuga.cloud-1423932151
+    conductionprod:cluster-api.conductionprod.wh2mnkj.shoot.emk.fuga.cloud-1749158776
+    test-accept:cluster-api.test-accept.wh2mnkj.shoot.emk.fuga.cloud-3791817028"
+
+    for entry in $CLUSTERS; do
+      SHOOT=$(echo $entry | cut -d: -f1)
+      SECRET=$(echo $entry | cut -d: -f2)
+      SERVER="api.${SHOOT}.wh2mnkj.shoot.emk.fuga.cloud"
+
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] Processing: $SHOOT"
+
+      # Request admin kubeconfig
+      KUBECONFIG_JSON=$(kubectl create \
+        -f <(printf '{"spec":{"expirationSeconds":%d}}' "$EXPIRATION_SECONDS") \
+        --raw "/apis/core.gardener.cloud/v1beta1/namespaces/${NAMESPACE}/shoots/${SHOOT}/adminkubeconfig")
+
+      KUBECONFIG_B64=$(echo "$KUBECONFIG_JSON" | jq -r '.status.kubeconfig')
+      KUBECONFIG_YAML=$(echo "$KUBECONFIG_B64" | base64 -d)
+
+      # Extract credentials
+      CERT_DATA=$(echo "$KUBECONFIG_YAML" | yq -r '.users[0].user."client-certificate-data"')
+      KEY_DATA=$(echo "$KUBECONFIG_YAML" | yq -r '.users[0].user."client-key-data"')
+      CA_DATA=$(echo "$KUBECONFIG_YAML" | yq -r '.clusters[0].cluster."certificate-authority-data"')
+
+      # Build Argo CD config
+      CONFIG=$(cat <<EOF
+    {"tlsClientConfig":{"insecure":false,"certData":"${CERT_DATA}","keyData":"${KEY_DATA}","caData":"${CA_DATA}"}}
+    EOF
+    )
+
+      # Update secret (switch to in-cluster kubeconfig)
+      unset KUBECONFIG
+
+      CONFIG_B64=$(echo -n "$CONFIG" | base64 -w0)
+      SERVER_B64=$(echo -n "https://$SERVER" | base64 -w0)
+
+      kubectl -n "$ARGOCD_NAMESPACE" patch secret "$SECRET" \
+        --type='json' \
+        -p="[{\"op\":\"replace\",\"path\":\"/data/config\",\"value\":\"$CONFIG_B64\"},{\"op\":\"replace\",\"path\":\"/data/server\",\"value\":\"$SERVER_B64\"}]"
+
+      # Switch back to Gardener kubeconfig for next iteration
+      export KUBECONFIG=/gardener-sa/kubeconfig
+
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] Updated: $SHOOT"
+    done
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] All credentials refreshed"
 kind: ConfigMap
 metadata:
   name: argocd-credential-refresh-script

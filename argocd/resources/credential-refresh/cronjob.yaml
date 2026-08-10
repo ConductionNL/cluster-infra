@@ -22,6 +22,17 @@ spec:
           - command:
             - /bin/sh
             - /scripts/refresh.sh
+            # Zelfverlenging van het Gardener-token; defaults staan ook in
+            # refresh.sh, hier expliciet zodat ze zichtbaar en te draaien
+            # zijn zonder de ConfigMap te lezen. 2160h = 90d is het
+            # maximum dat Gardener uitgeeft.
+            env:
+            - name: GARDENER_SA
+              value: argocd-automation
+            - name: RENEW_BEFORE_DAYS
+              value: "30"
+            - name: TOKEN_DURATION
+              value: 2160h
             image: alpine/k8s:1.29.2
             imagePullPolicy: IfNotPresent
             name: refresh
@@ -42,7 +53,11 @@ spec:
               name: gardener-sa
               readOnly: true
           dnsPolicy: ClusterFirst
-          restartPolicy: OnFailure
+          # Never i.p.v. OnFailure: bij OnFailure ruimt de job-controller de
+          # pod op zodra backoffLimit is bereikt, en dan zijn de logs van de
+          # storing weg (aangetoond 2026-08-10). Met Never blijven de falende
+          # pods staan tot failedJobsHistoryLimit ze opruimt.
+          restartPolicy: Never
           schedulerName: default-scheduler
           securityContext: {}
           serviceAccount: argocd-credential-refresh
