@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-11 — pre-commit: techbook-hooks naar v0.2.0
+
+De techbook-hooks stonden nog op commit `edf269ee` terwijl `monitoring`,
+`Nextcloud-base` en `openwoo-app-config` al op tag `v0.2.0` zitten. Naar `v0.2.0`
+gebracht en de hook `docs-touched` toegevoegd, zodat deze repo dezelfde gate
+draait als de rest. Alle zes hooks groen over de hele repo.
+
 ## 2026-08-10 — credential-refresh: verlopen Gardener-token, logretentie en docs
 
 De CronJob `argocd-credential-refresh` faalde om 12:00 UTC
