@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-08-11 — docs-controle op de credential-refresh-wijziging
+
+Alle claims uit de wijziging van 2026-08-10 nagetrokken tegen het cluster. Ze
+kloppen: `restartPolicy` staat op `Never`, de env-vars `GARDENER_SA`,
+`RENEW_BEFORE_DAYS` (30) en `TOKEN_DURATION` staan op de container, de live
+`refresh.sh` bevat het zelfverleng-blok, en de run van 2026-08-11 00:00 UTC
+logde `Gardener-token: 89d resterend (drempel 30d)` en patchte alle drie de
+clusters. De genoemde alertnamen bestaan ook echt in de monitoring-repo.
+
+- `docs/argocd.md`, § tweede refresh-pad: de **bron** benoemd
+  (`toolchain/scripts/login_script.sh`, drie `argocd cluster add --upsert --yes`
+  met persoonlijke kubeconfigs; dezelfde constructie zit in de robert- en
+  ruben-varianten, dus het geldt voor drie mensen), plus de branch waar de fix
+  klaarligt en een controle om te zien of het pad écht weg is. Reden: zodra die
+  fix landt, wijst deze sectie de volgende lezer bij een storing de verkeerde
+  kant op. Nu staat er wat je moet meten en wanneer de sectie mag verdwijnen.
+
 ## 2026-08-11 — pre-commit: techbook-hooks naar v0.2.0
 
 De techbook-hooks stonden nog op commit `edf269ee` terwijl `monitoring`,
