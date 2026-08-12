@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-08-10
+last_reviewed: 2026-08-11
 owner: info@conduction.nl
 ---
 
@@ -144,9 +144,27 @@ kapot was. Reken daar niet op:
 
 Zie je in `cluster-api.*` een certsubject dat níét `argocd-automation`
 is, dan is de CronJob dus in werkelijkheid stil — ook als Argo groen
-staat. Dat is precies het signaal om § Roteren te doorlopen. Het
-opruimen van dit tweede pad (`mcc` laat ophouden met het patchen van
-platformsecrets) is een openstaand punt buiten deze repo.
+staat. Dat is precies het signaal om § Roteren te doorlopen.
+
+**Dit pad wordt opgeruimd.** De bron is `toolchain/scripts/login_script.sh`:
+drie `argocd cluster add --upsert --yes`-aanroepen met de persoonlijke
+kubeconfigs uit `~/.kube`. Dezelfde constructie staat ook in
+`login_script_robert.sh` en `login_script_ruben.sh`, dus het geldt voor
+drie mensen. Een wijziging die de drie aanroepen weghaalt ligt klaar op
+branch `fix/geen-persoonlijke-argocd-cluster-add` in die repo.
+
+Werk deze sectie bij zodra dat geland is — zolang de tekst blijft staan
+terwijl het pad weg is, stuurt hij de volgende lezer op een verkeerd
+spoor bij een storing. Controleer dat met:
+
+    kubectl -n argocd get secret cluster-api.con-prod.wh2mnkj.shoot.emk.fuga.cloud-1423932151 \
+      -o jsonpath='{.data.config}' | base64 -d \
+      | jq -r '.tlsClientConfig.certData' | base64 -d \
+      | openssl x509 -noout -subject
+
+Staat daar een dag na de wijziging nog steeds alleen `argocd-automation`
+in — ook 's ochtends ná 05:00 CEST, wanneer de oude timer liep — dan is
+het tweede pad echt weg en mag deze sectie naar de CHANGELOG.
 
 ## Adoptie (fase 3 — elke stap door een mens)
 
