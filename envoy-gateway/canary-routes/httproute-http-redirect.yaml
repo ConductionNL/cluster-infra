@@ -1,0 +1,37 @@
+---
+# HTTP -> HTTPS voor de drie canary-hosts.
+#
+# Zonder deze route geeft de Gateway op poort 80 een 404, terwijl nginx voor
+# dezelfde hosts vandaag een 308 teruggeeft (gemeten 2026-08-17 op
+# canary.accept.openwoo.app en canary.accept.commonground.nu). Dat verschil
+# komt niet uit een annotatie — ingress-nginx doet dit standaard zodra er TLS
+# op de Ingress staat — en zou bij een DNS-cutover stil kapotgaan.
+#
+# 308 en niet 301: 308 behoudt de HTTP-methode, wat uitmaakt voor een POST naar
+# een http-URL. Zo doet nginx het nu ook.
+#
+# Staat in canary-accept omdat een HTTPRoute ergens moet wonen; hij dekt met
+# `hostnames` ook de host van almere-accept. Bij de batch-migratie hoort dit
+# een route op de Gateway zelf te worden, niet per tenant.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: canary-http-to-https
+  namespace: canary-accept
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: platform-gateway
+      namespace: envoy-gateway-system
+      sectionName: http
+  hostnames:
+    - canary.accept.openwoo.app
+    - almere.accept.openwoo.app
+    - canary.accept.commonground.nu
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 308

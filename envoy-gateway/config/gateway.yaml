@@ -1,0 +1,63 @@
+---
+# De gedeelde Gateway. Eén per cluster; tenants hangen er straks een HTTPRoute
+# aan vanuit hun eigen namespace.
+#
+# allowedRoutes.namespaces.from: All is BEWUST zo breed. Het spiegelt de
+# huidige situatie onder ingress-nginx, waar elke namespace een Ingress mag
+# maken. Verscherpen (label-selector + ReferenceGrant) is de eigenlijke winst
+# van deze migratie, maar hoort in een aparte change nadat het isolatiemodel is
+# vastgesteld — niet stilzwijgend hier.
+#
+# TLS zonder cert-manager-wijziging:
+#   *.accept.openwoo.app      bestaand wildcard, door reflector in deze
+#                             namespace gespiegeld (zie
+#                             cert-manager/wildcard-openwoo-certificate.yaml)
+#   canary.accept.commonground.nu
+#                             bestaand per-host secret in ns canary-accept,
+#                             gelezen via een ReferenceGrant. Read-only: de
+#                             nginx-Ingress blijft dezelfde Secret gebruiken en
+#                             houdt de HTTP-01-vernieuwing in de lucht.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: platform-gateway
+  namespace: envoy-gateway-system
+spec:
+  gatewayClassName: eg
+  listeners:
+    # Poort 80 bestaat voor de HTTP->HTTPS-redirect (een HTTPRoute met een
+    # RequestRedirect-filter) en voor ACME HTTP-01 zodra cert-manager's
+    # Gateway-ondersteuning aangaat. Vandaag hangt er nog niets aan.
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: All
+
+    - name: https-openwoo
+      protocol: HTTPS
+      port: 443
+      hostname: "*.accept.openwoo.app"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: wildcard-openwoo-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+
+    - name: https-canary-nextcloud
+      protocol: HTTPS
+      port: 443
+      hostname: "canary.accept.commonground.nu"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: nextcloud-canary-accept-tls
+            namespace: canary-accept
+      allowedRoutes:
+        namespaces:
+          from: All

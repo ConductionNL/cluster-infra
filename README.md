@@ -7,7 +7,17 @@ cluster, require cluster-wide RBAC, and upgrade on their own lifecycle.
 
 Components: external-dns (Cloudflare), cert-manager config (Let's
 Encrypt DNS-01 + wildcard cert), external-secrets, reflector,
-fuse-device-plugin, seccomp-profiles, storage classes.
+fuse-device-plugin, seccomp-profiles, storage classes, and Gateway API
+via Envoy Gateway.
+
+Gateway API runs **alongside** the (externally managed) ingress-nginx
+controller, not in place of it: ingress-nginx is EOL upstream, and tenants
+migrate one at a time from `Ingress` to `HTTPRoute`. Three canary routes
+are defined; the bootstrap is a manual, ordered `kubectl apply` (step 4
+below). See [docs/gateway-api.md](docs/gateway-api.md) — read it
+before touching anything under `envoy-gateway/` or `gateway-api/`, because
+the PROXY-protocol setup and the CRD vendoring both have failure modes that
+are not obvious from the manifests.
 
 ## Layout
 

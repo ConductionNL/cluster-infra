@@ -1,0 +1,70 @@
+---
+# Canary 3 — de Nextcloud van canary-accept. Dit is de route die de migratie
+# daadwerkelijk bewijst; de twee frontends testen alleen het platform.
+#
+# Loopt naast de bestaande Ingress. Deze host krijgt in deze change BEWUST GEEN
+# DNS-wijziging: het certificaat nextcloud-canary-accept-tls wordt via HTTP-01
+# over de nginx-Ingress vernieuwd, en dat breekt zodra de host naar Envoy
+# wijst. Valideren gaat met `curl --resolve` tegen het Envoy-IP. Pas als
+# cert-manager's Gateway-ondersteuning aanstaat (--enable-gateway-api, nu uit)
+# kan deze host echt verhuizen.
+#
+# De filters hieronder reproduceren wat er VANDAAG op de lijn staat. Gemeten
+# 2026-08-17 met `curl -I https://canary.accept.commonground.nu/status.php`,
+# niet afgeleid uit de annotaties — dat scheelt twee fouten:
+#
+#   * nginx.ingress.kubernetes.io/hsts-max-age is geen geldige annotatie maar
+#     een ConfigMap-instelling. De 15552000 uit Nextcloud-base/values/common.yaml
+#     doet dus niets; op de lijn staat de controller-default 31536000.
+#   * de nginx-sidecar in de pod zet zelf ook een HSTS-header (15768000), maar
+#     die haalt de client niet: ingress-nginx overschrijft hem.
+#
+# De CORS-instelling is overgenomen zoals hij is, niet zoals hij bedoeld lijkt.
+# allow-origin `*` in combinatie met allow-credentials `true` wordt door elke
+# browser geweigerd, en allow-headers is teruggebracht tot alleen
+# X-Forwarded-For. Dat ziet er onbedoeld uit, maar het repareren hoort niet in
+# een migratie die pariteit moet aantonen — apart melden.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: nextcloud-gateway
+  namespace: canary-accept
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: platform-gateway
+      namespace: envoy-gateway-system
+      sectionName: https-canary-nextcloud
+  hostnames:
+    - canary.accept.commonground.nu
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: nextcloud
+          port: 8080
+
+      # Envoy's default route-timeout is 15 seconden; nginx staat op 1800.
+      # Zonder deze twee regels breekt elke upload en elke trage sync.
+      timeouts:
+        request: 1800s
+        backendRequest: 1800s
+
+      filters:
+        - type: CORS
+          cors:
+            allowOrigins:
+              - "*"
+            allowMethods: [GET, PUT, POST, DELETE, PATCH, OPTIONS]
+            allowHeaders: [X-Forwarded-For]
+            allowCredentials: true
+            maxAge: 1728000
+
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - name: Strict-Transport-Security
+                value: "max-age=31536000; includeSubDomains"

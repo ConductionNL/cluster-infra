@@ -19,6 +19,8 @@ spec:
     - "https://charts.jetstack.io"              # cert-manager (future)
     - "https://kubernetes.github.io/ingress-nginx" # ingress-nginx (future)
     - "https://emberstack.github.io/helm-charts" # reflector (cross-ns Secret replication)
+    # Envoy Gateway. OCI-registry, dus zonder oci://-prefix — zo wil Argo hem.
+    - "docker.io/envoyproxy"                     # envoy-gateway (gateway-helm)
 
   destinations:
     - server: https://kubernetes.default.svc
@@ -35,6 +37,17 @@ spec:
       namespace: kube-system
     - server: https://kubernetes.default.svc
       namespace: reflector
+    - server: https://kubernetes.default.svc
+      namespace: envoy-gateway-system
+    # TIJDELIJK — alleen voor de canary-HTTPRoutes (Application
+    # gateway-canary-routes). Twee met naam genoemde tenant-namespaces, geen
+    # wildcard: cluster-infra hoort niet in tenantruimte te kunnen schrijven.
+    # Weghalen zodra de routes naar de generators van Nextcloud-base en
+    # react-base verhuizen.
+    - server: https://kubernetes.default.svc
+      namespace: canary-accept
+    - server: https://kubernetes.default.svc
+      namespace: almere-accept
 
   # Cluster-wide resources that infra components need
   clusterResourceWhitelist:
@@ -52,6 +65,13 @@ spec:
       kind: ValidatingWebhookConfiguration
     - group: admissionregistration.k8s.io
       kind: MutatingWebhookConfiguration
+    # Gateway API levert een safe-upgrade-policy mee in dezelfde CRD-bundel.
+    - group: admissionregistration.k8s.io
+      kind: ValidatingAdmissionPolicy
+    - group: admissionregistration.k8s.io
+      kind: ValidatingAdmissionPolicyBinding
+    - group: gateway.networking.k8s.io          # GatewayClass eg (envoy-gateway)
+      kind: GatewayClass
     - group: storage.k8s.io
       kind: StorageClass
 

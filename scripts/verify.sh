@@ -6,8 +6,8 @@
 #
 # Parseert alle YAML (waardes én manifests) en valideert de Kubernetes-
 # manifests (argo/, fuse-device-plugin/, seccomp-profiles/, storage/,
-# cert-manager/) met kubeconform. Helm-values zijn vrije vorm en worden
-# alleen op parseerbaarheid gecontroleerd. Dry-run only.
+# cert-manager/, envoy-gateway/) met kubeconform. Helm-values zijn vrije vorm
+# en worden alleen op parseerbaarheid gecontroleerd. Dry-run only.
 #
 # Writes: read-only (kubeconform cachet schemas in $HOME)
 # Idempotent: yes
@@ -56,9 +56,12 @@ kubectl kustomize argocd | kubeconform -strict \
   -skip CustomResourceDefinition - \
   || { echo "verify FAALT: argocd" >&2; exit 1; }
 
+# gateway-api/crds/ staat hier bewust NIET bij: dat zijn gevendorde
+# CRD-definities uit de chart, die valideren we niet opnieuw (zelfde reden als
+# de -skip bij argocd). De YAML-parse hierboven dekt ze wel.
 kubeconform -strict -ignore-filename-pattern 'values\.yaml' \
   -schema-location default -schema-location "$CRD_SCHEMAS" \
-  -summary argo/ fuse-device-plugin/ storage/ cert-manager/
+  -summary argo/ fuse-device-plugin/ storage/ cert-manager/ envoy-gateway/
 
 # Doc-assertion (docs-claims): het componentenoverzicht in docs/index.md
 # dekt precies de Argo Applications — geen spookrijen, geen gaten.

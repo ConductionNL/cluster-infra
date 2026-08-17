@@ -1,0 +1,32 @@
+---
+# EnvoyProxy — infrastructuurinstellingen voor het dataplane dat Envoy Gateway
+# per Gateway uitrolt. Gekoppeld via GatewayClass.parametersRef.
+#
+# De annotaties zijn één-op-één overgenomen van de bestaande nginx-Service
+# (svc/nginx-ingress-nginx-controller in ns ingress-nginx, gelezen 2026-08-17),
+# zodat de nieuwe OpenStack-loadbalancer dezelfde eigenschappen krijgt:
+#
+#   proxy-protocol          de LB spreekt PROXY-protocol; zonder de bijbehorende
+#                           ClientTrafficPolicy (config/clienttrafficpolicy.yaml)
+#                           sluit Envoy elke verbinding
+#   timeout-*: 600000 ms    10 minuten, gelijk aan nginx vandaag
+#
+# LET OP: dit levert een TWEEDE OpenStack-loadbalancer op met een eigen publiek
+# IP, naast de bestaande op 81.24.6.82. Dat is gewenst — ingress-nginx blijft
+# ongemoeid draaien — maar het is een kostenpost en een firewallwijziging.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: platform-proxy
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: LoadBalancer
+        annotations:
+          loadbalancer.openstack.org/proxy-protocol: "true"
+          loadbalancer.openstack.org/timeout-client-data: "600000"
+          loadbalancer.openstack.org/timeout-member-connect: "600000"
+          loadbalancer.openstack.org/timeout-member-data: "600000"

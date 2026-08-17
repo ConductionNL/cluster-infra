@@ -1,0 +1,60 @@
+---
+# Canary 1 en 2 — de WOO-frontends van canary-accept en almere-accept.
+#
+# Deze routes lopen NAAST de bestaande Ingress voor dezelfde host. Beide
+# blijven bestaan tot de eigenaar functionele pariteit bevestigt; pas daarna
+# verhuist het DNS-record. Terugdraaien = deze objecten verwijderen.
+#
+# De frontends dragen vandaag nul nginx-annotaties (react-base zet alleen
+# className en pathType), dus er valt niets te vertalen: één host, één backend,
+# geen filters, geen timeouts. Dat maakt ze geschikt als eerste test van het
+# platform — LB, PROXY-protocol, TLS en DNS — en ongeschikt om iets over de
+# Nextcloud-migratie te bewijzen. Daarvoor is canary 3.
+#
+# Ze staan hier en niet in de ApplicationSet van react-base, zodat de generator
+# die 84 tenants voedt buiten schot blijft. Bij de batch-migratie verhuist dit.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: woo-website-gateway
+  namespace: canary-accept
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: platform-gateway
+      namespace: envoy-gateway-system
+      sectionName: https-openwoo
+  hostnames:
+    - canary.accept.openwoo.app
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: woo-website
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: woo-website-gateway
+  namespace: almere-accept
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: platform-gateway
+      namespace: envoy-gateway-system
+      sectionName: https-openwoo
+  hostnames:
+    - almere.accept.openwoo.app
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: woo-website
+          port: 80

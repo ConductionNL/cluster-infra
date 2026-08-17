@@ -27,9 +27,14 @@ spec:
     - "*.openwoo.app"
     - "*.accept.openwoo.app"
   # Annotations stamped onto the generated Secret so reflector replicates it.
+  # envoy-gateway-system staat er expliciet bij (los, geen wildcard): de
+  # gedeelde Gateway termineert TLS voor *.accept.openwoo.app en heeft het
+  # secret dus in zijn eigen namespace nodig. Een Gateway kan een Secret uit een
+  # andere namespace alleen via een ReferenceGrant lezen, en die zou dan in
+  # cert-manager moeten staan — spiegelen is hier de kleinere ingreep.
   secretTemplate:
     annotations:
       reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
-      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: ".*-(accept|prod|test|demo)"
+      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: ".*-(accept|prod|test|demo),envoy-gateway-system"
       reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
-      reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: ".*-(accept|prod|test|demo)"
+      reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: ".*-(accept|prod|test|demo),envoy-gateway-system"

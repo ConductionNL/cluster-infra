@@ -1,0 +1,31 @@
+---
+# PROXY-protocol op de Gateway-listeners.
+#
+# De OpenStack-loadbalancer stuurt een PROXY-protocol-header (annotatie
+# loadbalancer.openstack.org/proxy-protocol op de Service, zie
+# envoyproxy.yaml). Zonder deze policy interpreteert Envoy die header niet en
+# sluit hij elke verbinding — het is dus geen optimalisatie maar een
+# voorwaarde om überhaupt verkeer af te handelen.
+#
+# `optional` staat expliciet op false: verkeer zonder PROXY-header wordt
+# geweigerd. Dat is juist, want de enige weg naar deze listeners loopt via de
+# LB. Op true zetten zou het spoofen van het clientadres mogelijk maken.
+#
+# Geen clientIPDetection.xForwardedFor: met PROXY-protocol kent Envoy het echte
+# clientadres al en zet hij dat zelf in X-Forwarded-For. Een binnenkomende
+# XFF-header van een client vertrouwen zou het adres juist vervalsbaar maken.
+# Dit vervangt de nginx-annotaties use-forwarded-headers,
+# compute-full-forwarded-for en enable-real-ip.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: platform-gateway-proxy-protocol
+  namespace: envoy-gateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: platform-gateway
+  # `enableProxyProtocol` is in 1.8 deprecated ten gunste van dit veld.
+  proxyProtocol:
+    optional: false

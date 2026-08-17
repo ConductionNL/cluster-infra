@@ -1,0 +1,15 @@
+---
+# GatewayClass `eg` — de klasse waar elke Gateway op dit cluster naar verwijst.
+# controllerName moet gelijk zijn aan config.envoyGateway.gateway.controllerName
+# in ../values.yaml, anders pakt de controller de klasse niet op.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: platform-proxy
+    namespace: envoy-gateway-system

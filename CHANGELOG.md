@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-08-17 — Gateway API naast ingress-nginx (canary)
+
+Vier nieuwe Applications, naast de bestaande controller — er verandert niets
+voor verkeer dat vandaag over nginx loopt. Aanleiding: `ingress-nginx` is
+upstream gearchiveerd (2026-03-24) en draait hier met
+`allow-snippet-annotations: true` + `annotations-risk-level: Critical`, wat
+elke namespace met Ingress-rechten nginx-configuratie laat injecteren.
+
+- `gateway-api-crds` — 20 CRD's + safe-upgrade-policy, gevendord uit
+  `gateway-helm` 1.8.3 (Gateway API bundle v1.5.1) in
+  `gateway-api/crds/envoy-gateway-crds-1.8.3.yaml`. `prune: false`: een CRD
+  weghalen wist elk object van dat type tegelijk. Herkomst, sha256 en de
+  bump-procedure in `gateway-api/README.md`. Niet het upstream
+  standard-channel-asset: dat heeft 8 CRD's, de chart 12, en de ClusterRole van
+  Envoy Gateway watcht `tcproutes`/`udproutes`/`listenersets`.
+- `envoy-gateway` — de controller, chart gepind op 1.8.3, `crds.enabled=false`.
+  OCI-registry, dus `repoURL: docker.io/envoyproxy` zonder `oci://`-prefix.
+- `envoy-gateway-config` — `GatewayClass eg`, `Gateway platform-gateway`,
+  `EnvoyProxy` en `ClientTrafficPolicy`. Gescheiden van de controller om
+  dezelfde reden als `cert-manager-config`.
+- `gateway-canary-routes` — tijdelijk: HTTPRoutes voor
+  `canary-accept/woo-website`, `almere-accept/woo-website` en
+  `canary-accept/nextcloud`, een HTTP→HTTPS-redirect (308, want nginx geeft
+  vandaag ook 308 en zonder route zou poort 80 een 404 geven) en een
+  `ReferenceGrant`. Verhuist naar de generators zodra de batch-migratie begint.
+
+Punten die tijdens de bouw uit metingen bleken en niet uit de manifests:
+
+- De OpenStack-LB spreekt PROXY-protocol. Zonder `ClientTrafficPolicy` sluit
+  Envoy elke verbinding. `enableProxyProtocol` is in 1.8 deprecated; gebruikt is
+  `proxyProtocol.optional: false`.
+- Envoy's default route-timeout is 15s tegen 1800s bij nginx. De
+  Nextcloud-HTTPRoute zet `timeouts.request`/`backendRequest` expliciet.
+- De HSTS- en CORS-filters zijn afgeleid van de **gemeten** response-headers,
+  niet van de annotaties: `nginx.ingress.kubernetes.io/hsts-max-age` is geen
+  geldige annotatie, dus op de lijn staat de controller-default 31536000 en
+  niet de 15552000 uit `Nextcloud-base`.
+- De Nextcloud-canary krijgt geen DNS-wijziging: zijn certificaat wordt via
+  HTTP-01 over de nginx-Ingress vernieuwd en dat breekt bij een cutover.
+
+Meegewijzigd: `external-dns` leest nu ook `gateway-httproute` (additief, de
+chart breidt de ClusterRole zelf uit); de reflector-regex op het
+openwoo-wildcard is uitgebreid met `envoy-gateway-system`; `verify.sh`
+valideert `envoy-gateway/` mee; AppProject uitgebreid met de OCI-bron,
+`envoy-gateway-system`, twee met naam genoemde canary-namespaces en de
+cluster-scoped types `GatewayClass` en `ValidatingAdmissionPolicy(Binding)`.
+
+`./scripts/verify.sh` groen: 44 YAML-bestanden geparseerd, 25 manifests valide,
+doc-assertie dekt 12 Applications.
+
 ## 2026-08-11 — docs-controle op de credential-refresh-wijziging
 
 Alle claims uit de wijziging van 2026-08-10 nagetrokken tegen het cluster. Ze

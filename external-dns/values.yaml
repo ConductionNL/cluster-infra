@@ -8,9 +8,14 @@ domainFilters:
   - openwoo.app
   - opencatalogi.nl
 
-# Watch Ingress resources for hostnames
+# Watch Ingress resources for hostnames.
+# gateway-httproute erbij voor de Gateway-API-migratie: external-dns leest dan
+# ook de hostnames van HTTPRoutes en zet ze op het adres van de Gateway.
+# Additief — zolang er geen HTTPRoute bestaat verandert er niets. De chart
+# breidt de ClusterRole automatisch uit zodra deze source aanstaat.
 sources:
   - ingress
+  - gateway-httproute
 
 # Provider
 provider:

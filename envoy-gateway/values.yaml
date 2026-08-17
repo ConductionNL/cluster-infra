@@ -1,0 +1,38 @@
+---
+# Envoy Gateway — controller (control plane) voor Gateway API.
+# https://gateway.envoyproxy.io/
+#
+# Deze values sturen alleen de controller. De GatewayClass, de Gateway zelf en
+# de EnvoyProxy/ClientTrafficPolicy staan als kale manifests in config/ en
+# worden door de Application envoy-gateway-config uitgerold — zelfde splitsing
+# als bij cert-manager (operator vs cert-manager-config).
+
+# CRD's komen NIET uit deze chart maar gevendord uit gateway-api/crds/, zodat er
+# precies één eigenaar is en een chart-bump de CRD's niet stilzwijgend
+# meeverandert. Zie gateway-api/README.md.
+crds:
+  enabled: false
+
+config:
+  envoyGateway:
+    gateway:
+      # Moet gelijk zijn aan spec.controllerName in config/gatewayclass.yaml.
+      controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    provider:
+      type: Kubernetes
+    logging:
+      level:
+        default: info
+
+deployment:
+  envoyGateway:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 1024Mi
+
+# De namespace wordt door Argo aangemaakt (CreateNamespace=true), niet door de
+# chart — anders beheren twee partijen hetzelfde object.
+createNamespace: false

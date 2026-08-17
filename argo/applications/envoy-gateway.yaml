@@ -1,0 +1,63 @@
+---
+# Envoy Gateway — control plane voor Gateway API.
+#
+# Staat in cluster-infra omdat het een clustercapability is, geen
+# app-platformzorg: Nextcloud-base en react-base consumeren straks alleen
+# HTTPRoutes. Zelfde redenering als bij external-secrets en external-dns.
+#
+# Draait NAAST ingress-nginx, niet in plaats daarvan. Bestaande Ingresses
+# blijven ongemoeid; migratie gaat per tenant via een HTTPRoute.
+#
+# Patroon: upstream Helm chart + values uit deze repo (zoals external-dns).
+# Let op: dit is een OCI-registry. Argo wil de repoURL ZONDER oci://-prefix.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: envoy-gateway
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: cluster-infra
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: cluster-infra
+
+  sources:
+    # Envoy Gateway Helm chart (alleen de controller; crds.enabled=false).
+    - repoURL: "docker.io/envoyproxy"
+      chart: gateway-helm
+      # Pin, nooit "latest". Geverifieerd 2026-08-17: chart 1.8.3 ==
+      # appVersion v1.8.3, bundelt Gateway API v1.5.1 en vereist Kubernetes
+      # >= v1.32 (cluster draait v1.35). De CRD's die bij deze pin horen staan
+      # gevendord in gateway-api/crds/ — bump ze samen, nooit los.
+      targetRevision: "1.8.3"
+      helm:
+        releaseName: envoy-gateway
+        valueFiles:
+          - "$values/envoy-gateway/values.yaml"
+
+    # Values from this repo.
+    - repoURL: "https://github.com/ConductionNL/cluster-infra.git"
+      targetRevision: HEAD
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: envoy-gateway-system
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 2m
+
+  revisionHistoryLimit: 5
