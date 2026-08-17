@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-08-17 (later) — routes naar de generators, tijdelijke constructie weg
+
+De canary-routes stonden in deze repo omdat de generators van Nextcloud-base en
+react-base tijdens de eerste uitrol niet geraakt mochten worden. Dat is nu de
+conventie geworden die het hoort te zijn: **het platform bezit de Gateway, de
+tenant bezit zijn route.**
+
+- `gateway-canary-routes` en `envoy-gateway/canary-routes/` verwijderd. De
+  routes komen nu uit `React-base/charts/woo-website` en
+  `Nextcloud-base/charts/tenant-httproute`, gerenderd door dezelfde
+  ApplicationSets die vandaag hun Ingress renderen. Opt-in per tenant met
+  `gateway.frontend` / `gateway.nextcloud`.
+- `canary-accept` en `almere-accept` uit de `destinations` van het AppProject.
+  Cluster-infra kan daarmee niet meer in tenantruimte schrijven.
+- De HTTP→HTTPS-redirect blijft, maar verhuist naar
+  `envoy-gateway/config/httproute-http-redirect.yaml` en is nu hostname-loos:
+  permanent platformgedrag voor élke host op de Gateway in plaats van drie
+  hardgecodeerde canary-hosts.
+
+Opruimen in het cluster is handwerk: `kubectl delete application -n argocd
+gateway-canary-routes`. De volgorde maakt niet uit — er loopt nog geen verkeer
+over de Gateway, want geen enkel DNS-record wijst ernaar.
+
+`docs/gateway-api.md` herschreven met de eigendomsverdeling, de vier gemeten
+verschillen met nginx, en twee dingen die eerder fout in de docs stonden: een
+`curl` op de hostnaam raakt nog nginx (dus valideren gaat met `--resolve`), en
+een cutover is het wéghalen van de Ingress, niet het bijzetten van de route.
+
+Bekende beperking, expliciet opgeschreven: Nextcloud-hosts hebben elk een eigen
+HTTP-01-certificaat en dus elk een eigen listener op de gedeelde Gateway. Dat
+schaalt niet naar 84. De oplossing is een DNS-01-wildcard voor
+`*.commonground.nu`, zoals al gedaan voor openwoo.app.
+
 ## 2026-08-17 — Gateway API naast ingress-nginx (canary)
 
 Vier nieuwe Applications, naast de bestaande controller — er verandert niets

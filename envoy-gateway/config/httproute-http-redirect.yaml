@@ -1,0 +1,34 @@
+---
+# HTTP -> HTTPS voor álles op deze Gateway. Permanent platformgedrag, geen
+# tenantzaak: zonder deze route geeft poort 80 een 404, terwijl ingress-nginx
+# voor dezelfde hosts een 308 teruggeeft (gemeten 2026-08-17). Dat verschil zou
+# bij een cutover stil kapotgaan.
+#
+# Geen `hostnames`: de route matcht alles wat op de HTTP-listener binnenkomt, dus
+# elke tenant die later migreert krijgt dit gedrag zonder eigen regel.
+#
+# `sectionName: http` is verplicht en geen detail. Zonder pin hecht deze route
+# zich óók aan de HTTPS-listeners en redirect hij https naar https — een
+# oneindige lus. Om dezelfde reden pinnen tenant-routes zich aan hun
+# HTTPS-listener: een route met een expliciete hostname wint van deze
+# hostname-loze, en dan zou http:// inhoud serveren in plaats van redirecten.
+#
+# 308 en niet 301: 308 behoudt de HTTP-methode, wat uitmaakt voor een POST naar
+# een http-URL. Zo doet nginx het nu ook.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: http-to-https
+  namespace: envoy-gateway-system
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: platform-gateway
+      sectionName: http
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 308

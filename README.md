@@ -12,9 +12,10 @@ via Envoy Gateway.
 
 Gateway API runs **alongside** the (externally managed) ingress-nginx
 controller, not in place of it: ingress-nginx is EOL upstream, and tenants
-migrate one at a time from `Ingress` to `HTTPRoute`. Three canary routes
-are defined; the bootstrap is a manual, ordered `kubectl apply` (step 4
-below). See [docs/gateway-api.md](docs/gateway-api.md) — read it
+migrate one at a time from `Ingress` to `HTTPRoute`. This repo owns the
+`Gateway`; the routes themselves are rendered per tenant by the Nextcloud-base
+and React-base generators, so cluster-infra needs no write access to tenant
+namespaces. See [docs/gateway-api.md](docs/gateway-api.md) — read it
 before touching anything under `envoy-gateway/` or `gateway-api/`, because
 the PROXY-protocol setup and the CRD vendoring both have failure modes that
 are not obvious from the manifests.

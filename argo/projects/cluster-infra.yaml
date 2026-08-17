@@ -39,15 +39,6 @@ spec:
       namespace: reflector
     - server: https://kubernetes.default.svc
       namespace: envoy-gateway-system
-    # TIJDELIJK — alleen voor de canary-HTTPRoutes (Application
-    # gateway-canary-routes). Twee met naam genoemde tenant-namespaces, geen
-    # wildcard: cluster-infra hoort niet in tenantruimte te kunnen schrijven.
-    # Weghalen zodra de routes naar de generators van Nextcloud-base en
-    # react-base verhuizen.
-    - server: https://kubernetes.default.svc
-      namespace: canary-accept
-    - server: https://kubernetes.default.svc
-      namespace: almere-accept
 
   # Cluster-wide resources that infra components need
   clusterResourceWhitelist:

@@ -25,8 +25,7 @@ upgrade lifecycle.
 | `storage` | StorageClass definitions |
 | `gateway-api-crds` | vendored Gateway API + Envoy Gateway CRDs (never pruned; see [gateway-api.md](gateway-api.md)) |
 | `envoy-gateway` | Gateway API control plane, running alongside ingress-nginx |
-| `envoy-gateway-config` | the shared `GatewayClass`, `Gateway`, `EnvoyProxy` and PROXY-protocol policy |
-| `gateway-canary-routes` | temporary — the three canary `HTTPRoute`s next to their existing Ingress |
+| `envoy-gateway-config` | the shared `GatewayClass`, `Gateway`, `EnvoyProxy`, PROXY-protocol policy and the HTTP→HTTPS redirect |
 
 Each component is an Argo CD `Application` under `argo/applications/`;
 the `AppProject` lives in `argo/projects/cluster-infra.yaml`.
