@@ -9,12 +9,15 @@
 # cert-manager/, envoy-gateway/) met kubeconform. Helm-values zijn vrije vorm
 # en worden alleen op parseerbaarheid gecontroleerd. Dry-run only.
 #
-# Writes: read-only (kubeconform cachet schemas in $HOME)
+# Writes: alleen de kubeconform-schemacache (zie KUBECONFORM_CACHE hieronder);
+#         verder read-only
 # Idempotent: yes
 # Requires: python3, kubectl, kubeconform
 #
 # Usage:
 #   ./scripts/verify.sh
+#   KUBECONFORM_CACHE=/tmp/kc ./scripts/verify.sh   # eigen cachelocatie
+#   KUBECONFORM_CACHE= ./scripts/verify.sh          # leeg = geen cache
 
 set -euo pipefail
 
@@ -43,15 +46,29 @@ EOF
 
 readonly CRD_SCHEMAS='https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
 
+# kubeconform cachet NIET uit zichzelf: zonder -cache haalt elke run élk
+# CRD-schema opnieuw op bij raw.githubusercontent.com. Een handvol volledige
+# runs op één dag is genoeg om daar een anonieme rate limit (HTTP 429) te
+# raken, en dan hangt de pre-push gate minutenlang op backoff — aangetoond
+# 2026-08-17. Met de cache heeft alleen de eerste run het netwerk nodig.
+# Leeg zetten schakelt de cache uit (bijv. om een schema-update te forceren).
+kubeconform_cache_args=()
+if [[ -n "${KUBECONFORM_CACHE-${HOME}/.cache/kubeconform}" ]]; then
+  readonly KC_CACHE="${KUBECONFORM_CACHE-${HOME}/.cache/kubeconform}"
+  mkdir -p "$KC_CACHE"
+  kubeconform_cache_args=(-cache "$KC_CACHE")
+fi
+readonly kubeconform_cache_args
+
 # seccomp-profiles heeft een kustomization; de rest zijn kale manifests.
-kubectl kustomize seccomp-profiles | kubeconform -strict \
+kubectl kustomize seccomp-profiles | kubeconform -strict "${kubeconform_cache_args[@]}" \
   -schema-location default -schema-location "$CRD_SCHEMAS" - \
   || { echo "verify FAALT: seccomp-profiles" >&2; exit 1; }
 
 # argocd/ (zelfbeheer): render de kustomization (vendored upstream + delta).
 # CRD-definities zelf hebben geen schema in de catalog — expliciet geskipt;
 # alle overige objecten valideren strikt.
-kubectl kustomize argocd | kubeconform -strict \
+kubectl kustomize argocd | kubeconform -strict "${kubeconform_cache_args[@]}" \
   -schema-location default -schema-location "$CRD_SCHEMAS" \
   -skip CustomResourceDefinition - \
   || { echo "verify FAALT: argocd" >&2; exit 1; }
@@ -60,6 +77,7 @@ kubectl kustomize argocd | kubeconform -strict \
 # CRD-definities uit de chart, die valideren we niet opnieuw (zelfde reden als
 # de -skip bij argocd). De YAML-parse hierboven dekt ze wel.
 kubeconform -strict -ignore-filename-pattern 'values\.yaml' \
+  "${kubeconform_cache_args[@]}" \
   -schema-location default -schema-location "$CRD_SCHEMAS" \
   -summary argo/ fuse-device-plugin/ storage/ cert-manager/ envoy-gateway/
 
