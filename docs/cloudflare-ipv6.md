@@ -146,6 +146,28 @@ en een klanthostnaam valt daarbuiten.
 Verifiëren per host: `./scripts/check-cloudflare-proxy.sh <host>` — verwacht een
 AAAA, `server: cloudflare` en een werkende IPv6-verbinding.
 
+## Via de API controleren en zetten
+
+    CF_API_TOKEN=... ./scripts/cf-verify.sh              # leest zone-modus, fallback origin, custom hostnames, rule
+    CF_API_TOKEN=... ./scripts/cf-configrule-apply.sh    # dry-run van de Configuration Rule
+    CF_API_TOKEN=... ./scripts/cf-configrule-apply.sh --apply
+
+Rechten: `cf-verify.sh` heeft vijf Read-rechten (Zone, Zone Settings, DNS, SSL and
+Certificates, Config Rules); `cf-configrule-apply.sh` heeft Zone:Read plus
+Config Rules:Edit. Het token komt uit de omgeving en wordt nooit geprint; een
+ontbrekend recht meldt zich luidruchtig in plaats van als "OK".
+
+Gemeten en gezet op 2026-08-18: de regel stond op `full` in plaats van `strict`,
+en `www.openwoo.app` ontbrak in de expressie. Nu:
+
+    ssl=strict
+    (http.host ne "openwoo.app") and (http.host ne "www.openwoo.app") and (http.host ne "conduction.openwoo.app")
+
+Daarna nagemeten: de apex en `www` geven nog steeds hun 301 naar conduction.nl,
+`conduction.openwoo.app` en `canary.openwoo.app` geven 200. `full` werkt ook,
+maar valideert het origin-certificaat niet — en dat kan hier juist wel, want elke
+host presenteert een vertrouwd certificaat op zijn eigen naam.
+
 ## Certificaatautoriteit en CAA
 
 De CA van het edge-certificaat kies je op non-Enterprise niet zelf: Cloudflare

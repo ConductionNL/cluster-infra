@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-08-18 (later 7) — Cloudflare via de API: controleren en de rule zetten
+
+Twee scripts. `cf-verify.sh` leest de zone-SSL-modus, het fallback-origin-record,
+de custom hostnames en de Configuration Rule, en velt per stuk een oordeel.
+`cf-configrule-apply.sh` zet die regel, dry-run als default en idempotent.
+
+Wat de eerste meting opleverde: de regel stond op `full` in plaats van `strict`
+en `www.openwoo.app` ontbrak in de expressie. Bijgewerkt naar `ssl=strict` met
+alle drie de uitzonderingen. Nagemeten: apex en `www` geven nog hun 301,
+`conduction.openwoo.app` en `canary.openwoo.app` geven 200.
+
+Beide scripts lezen het token uit de omgeving en printen het nooit. Een
+ontbrekend recht meldt zich als "NIET OP TE HALEN" in plaats van stil als OK.
+
 ## 2026-08-18 (later 6) — standaardmail en de route voor onze eigen zone
 
 `docs/mail-ipv6-klant.md` is de template voor een klantdomein: twee stappen,
