@@ -202,6 +202,26 @@ TLS-handshakefout zolang hij geproxied stond; teruggezet op DNS only en daarna
 weer `Verify return code: 0`, status 200. Voor accept-hosts is Advanced
 Certificate Manager nodig (betaalde add-on), of ze blijven IPv4-only.
 
+## Vloot-uitrol en de accept-grens
+
+De proxy-vlag is geautomatiseerd in de ApplicationSet van React-base: **default
+aan voor de live-omgeving, uit voor accept**, met `frontend.proxied` als
+overrule in beide richtingen. Gemeten stand van de vloot op 2026-08-18:
+
+| Groep | Aantal | Wat er gebeurt |
+|---|---|---|
+| live onder `*.openwoo.app` | 17 | krijgen de proxy, dus AAAA |
+| live op een klantdomein | 12 | annotatie is een no-op; die lopen via Cloudflare for SaaS |
+| accept | 38 | blijven DNS-only tot ACM |
+
+**Accept meedoen kost Advanced Certificate Manager.** Universal SSL dekt
+`openwoo.app` en `*.openwoo.app`, niet `*.accept.openwoo.app`. Met ACM (betaalde
+add-on per zone) plus Total TLS krijgen ook hostnamen een niveau dieper een
+edge-certificaat; dan kan de default voor accept om. Zonder ACM is een geproxiede
+accept-host stuk, niet langzaam — TLS-handshakefout, gemeten.
+
+Support-antwoorden voor deze drie gevallen staan in `mail-ipv6-support.md`.
+
 ## Certificaatautoriteit en CAA
 
 De CA van het edge-certificaat kies je op non-Enterprise niet zelf: Cloudflare

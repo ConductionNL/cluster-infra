@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-08-18 (later 9) — vloot-default, accept-grens en support-antwoorden
+
+De proxy-vlag is nu een default in de ApplicationSet van React-base: aan voor
+live, uit voor accept. `docs/cloudflare-ipv6.md` heeft de vloot-tabel (17 live
+onder `*.openwoo.app` krijgen AAAA, 12 klantdomeinen zijn een no-op, 38 accept
+blijven DNS-only) en de voorwaarde voor accept: Advanced Certificate Manager,
+omdat Universal SSL geen tweede niveau dekt.
+
+Nieuw `docs/mail-ipv6-support.md`: drie situaties met een kant-en-klaar antwoord
+(host onder openwoo.app, klantdomein, acceptatie), plus wat support nooit belooft
+— geen DANE, geen CAA-verzoek, geen IPv6 op Nextcloud.
+
 ## 2026-08-18 (later 8) — IPv6 werkt op de canary
 
 `canary.openwoo.app` staat achter de Cloudflare-proxy en is over IPv6 bereikbaar:

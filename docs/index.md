@@ -39,6 +39,8 @@ the `AppProject` lives in `argo/projects/cluster-infra.yaml`.
   (uitleg + how-to).
 - [internet.nl — wat meetelt voor 100%](internet-nl.md) — de score-set,
   de gemeten stand per klanthost en wat er nog moet.
+- [Standaardantwoorden IPv6 voor support](mail-ipv6-support.md) — drie
+  situaties, drie antwoorden, plus wat je nooit belooft.
 - [Standaardmail IPv6 voor een klantdomein](mail-ipv6-klant.md) — template,
   in twee stappen, met wat er bewust níét in staat.
 - [CAA per zone](caa.md) — wie geeft er nú certificaten uit, en waarom een
