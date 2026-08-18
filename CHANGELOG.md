@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-08-18 (later 2) — periodieke buitenkant-meting als gate
+
+`internetnl-precheck.sh` kreeg `--strict` en `--allow`: hij faalt alleen op gaten
+die niet in de allowlist staan. Nieuwe workflow `internetnl.yml` draait dat elke
+maandag 06:00 UTC over `hosts/internetnl.txt` (33 publieke klanthosts).
+
+Op GitHub-runners en niet in de monitoring-stack, want deze meting mag niet
+afhangen van één cluster. En niet als pre-push-hook: vóór de deploy bestaat de
+stand niet, en een netwerkafhankelijke gate is een onbetrouwbare gate.
+
+`hosts/internetnl-allow.txt` bevat de 51 gemeten, bekende gaten van vandaag met
+de reden erbij. Dat is een werkvoorraad, geen vrijbrief.
+
+Twee gaten in het toezicht staan expliciet in `docs/internet-nl.md`:
+`CertificateExpiringSoon` ziet alleen cert-manager-certificaten (het handmatige
+Sectigo-cert van noorderzijlvest wordt door niets bewaakt), en de wekelijkse
+meting dekt de commonground-hosts nog niet.
+
 ## 2026-08-18 (later) — internet.nl: de score-set gemeten, niet aangenomen
 
 Klantomgevingen moeten naar 100%. Uit de bron van internet.nl (categories.py +

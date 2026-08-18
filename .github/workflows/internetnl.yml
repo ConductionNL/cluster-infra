@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: EUPL-1.2
+#
+# Periodieke buitenkant-meting van de publieke klanthosts.
+#
+# Waarom hier en niet als pre-push-hook: dit meet de LIVE stand. Vóór een deploy
+# bestaat die stand nog niet, en een netwerkafhankelijke check in een pre-push
+# gate maakt de gate onbetrouwbaar in plaats van strenger. De pre-push-hooks
+# blijven doen waar ze goed in zijn (render, lint, secrets); dit kijkt naar wat
+# er werkelijk over de lijn komt.
+#
+# Waarom in CI en niet in de monitoring-stack: deze meting mag niet afhangen van
+# één cluster. Draait hij op GitHub-runners, dan blijft hij werken als een
+# cluster onbereikbaar is — en dat is precies het moment waarop je hem wilt.
+#
+# De gate faalt alleen op gaten die NIET in hosts/internetnl-allow.txt staan.
+# Die allowlist is de werkvoorraad; hij hoort te krimpen.
+name: internetnl-precheck
+
+on:
+  schedule:
+    # Maandag 06:00 UTC — uitkomst ligt er voor de week begint.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/internetnl-precheck.sh"
+      - "hosts/internetnl*.txt"
+      - ".github/workflows/internetnl.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  precheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: dig installeren
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bind9-dnsutils
+
+      - name: meten
+        id: meten
+        run: |
+          ./scripts/internetnl-precheck.sh \
+            --file hosts/internetnl.txt \
+            --allow hosts/internetnl-allow.txt \
+            --strict | tee precheck.txt
+
+      - name: uitkomst bewaren
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: internetnl-precheck
+          path: precheck.txt
+          retention-days: 90

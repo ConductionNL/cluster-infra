@@ -1,0 +1,62 @@
+# Bekende, geaccepteerde gaten per host en subtest - gemeten 2026-08-18.
+# De gate faalt alleen op gaten die HIER NIET staan. Deze lijst is dus geen
+# vrijbrief maar een werkvoorraad: hij hoort te krimpen, niet te groeien.
+#
+# Waarom deze er nu in staan:
+#   IPv6     de loadbalancer is IPv4-only (zie docs/cloudflare-ipv6.md)
+#   sleutel  RSA-2048 bij tenants met een handmatig gezaaid certificaat
+#   DNSSEC   conduction.nl is niet ondertekend
+#   cert     open.noorderzijlvest.nl serveert geen intermediate; TE REPAREREN
+#   HSTS     open-oud.noaberkracht.nl is dood; TE VERWIJDEREN
+#
+acceptatie-open.gooisemeren.nl IPv6
+acceptatie-open.hofvantwente.nl IPv6
+acceptatie-open.hofvantwente.nl sleutel
+acceptatie-open.lansingerland.nl IPv6
+acceptatie-open.moerdijk.nl IPv6
+acceptatie-open.noaberkracht.nl IPv6
+acceptatie-open.noaberkracht.nl sleutel
+acceptatie-open.noordwijk.nl IPv6
+acceptatie-open.oude-ijsselstreek.nl IPv6
+acceptatie-open.oude-ijsselstreek.nl sleutel
+acceptatie-open.roosendaal.nl IPv6
+acceptatie-open.roosendaal.nl sleutel
+acceptatie-open.stichtsevecht.nl IPv6
+acceptatie-open.tubbergen.nl IPv6
+acceptatie-open.zutphen.nl IPv6
+demo.conduction.nl DNSSEC
+demo.conduction.nl IPv6
+demo.conduction.nl sleutel
+documenten.open.ede.nl IPv6
+open-oud.noaberkracht.nl HSTS
+open-oud.noaberkracht.nl IPv6
+open-oud.noaberkracht.nl TLS1.3
+open-oud.noaberkracht.nl cert
+open-oud.noaberkracht.nl sleutel
+open.buren.nl IPv6
+open.dinkelland.nl IPv6
+open.epe.nl IPv6
+open.gooisemeren.nl IPv6
+open.hofvantwente.nl IPv6
+open.lansingerland.nl sleutel
+open.moerdijk.nl IPv6
+open.noaberkracht.nl IPv6
+open.noorderzijlvest.nl HSTS
+open.noorderzijlvest.nl IPv6
+open.noorderzijlvest.nl cert
+open.noorderzijlvest.nl sleutel
+open.oude-ijsselstreek.nl IPv6
+open.oude-ijsselstreek.nl sleutel
+open.roosendaal.nl IPv6
+open.roosendaal.nl sleutel
+open.stichtsevecht.nl IPv6
+open.stichtsevecht.nl sleutel
+open.tubbergen.nl IPv6
+open.zutphen.nl IPv6
+test.conduction.nl DNSSEC
+test.conduction.nl IPv6
+test.conduction.nl sleutel
+verwerkingsregister.horstaandemaas.nl IPv6
+verwerkingsregister.horstaandemaas.nl sleutel
+verwerkingsregister.venray.nl IPv6
+verwerkingsregister.venray.nl sleutel

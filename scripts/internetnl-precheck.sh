@@ -22,6 +22,8 @@
 #   ./scripts/internetnl-precheck.sh open.dinkelland.nl open.tubbergen.nl
 #   ./scripts/internetnl-precheck.sh --file hosts.txt
 #   SKIP_RPKI=1 ./scripts/internetnl-precheck.sh open.epe.nl     # sneller
+#   ./scripts/internetnl-precheck.sh --file hosts/internetnl.txt \
+#     --allow hosts/internetnl-allow.txt --strict   # exit 1 bij nieuwe FAIL
 
 set -euo pipefail
 
@@ -29,6 +31,9 @@ readonly TIMEOUT="${TIMEOUT:-15}"
 readonly HSTS_MIN="${HSTS_MIN:-31536000}"
 readonly SKIP_RPKI="${SKIP_RPKI:-0}"
 readonly RIPESTAT="${RIPESTAT:-https://stat.ripe.net/data}"
+STRICT=0
+ALLOW=""
+FAILURES=0
 CACHE=""
 
 usage() {
@@ -135,15 +140,56 @@ check_host() {
   printf 'oud=%-9s ' "$old"
   printf 'cert=%-4s ' "$trust"
   printf 'sleutel=%s\n' "$key"
+
+  # In strict-modus tellen we alleen wat níét in de allowlist staat. Zo blijft
+  # een bekend, geaccepteerd gat (vandaag: IPv6) zichtbaar in de uitvoer zonder
+  # de gate elke week rood te maken — en valt een NIEUW gat wel op.
+  if (( STRICT == 1 )); then
+    local subtest
+    for subtest in $(host_failures "$host" "$aaaa" "$hsts" "$trust" "$tls13" "$old" "$key"); do
+      if [[ -n "$ALLOW" ]] && grep -qxF "${host} ${subtest}" "$ALLOW"; then
+        continue
+      fi
+      echo "  NIEUW GAT: ${host} ${subtest}" >&2
+      FAILURES=$((FAILURES + 1))
+    done
+  fi
+}
+
+# Namen van de meetellende subtests die falen. Eén regel per subtest, zodat de
+# allowlist per host én per subtest kan zijn.
+host_failures() {
+  local host="$1" aaaa="$2" hsts="$3" trust="$4" tls13="$5" old="$6" key="$7"
+  local zone
+  zone="$(zone_of "$host")"
+  [[ -z "$aaaa" ]] && echo IPv6
+  [[ -z "$(dig +short "$zone" DS)" ]] && echo DNSSEC
+  (( ${hsts:-0} >= HSTS_MIN )) || echo HSTS
+  [[ "$trust" == OK ]] || echo cert
+  [[ "$tls13" == OK ]] || echo TLS1.3
+  [[ "$old" == OK ]] || echo oude-TLS
+  case "$key" in
+    ECDSA) ;;
+    RSA-*) (( ${key#RSA-} >= 3072 )) || echo sleutel ;;
+    *) echo sleutel ;;
+  esac
+  [[ "$(ns_ipv6 "$zone")" == OK* ]] || echo NS-IPv6
+  return 0
 }
 
 main() {
   local hosts=()
-  case "${1:-}" in
-    ""|-h|--help) usage; exit 2 ;;
-    --file) mapfile -t hosts <"${2:?--file vereist een pad}" ;;
-    *) hosts=("$@") ;;
-  esac
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 2 ;;
+      --file) mapfile -t hosts <"${2:?--file vereist een pad}"; shift 2 ;;
+      --allow) ALLOW="${2:?--allow vereist een pad}"; shift 2 ;;
+      --strict) STRICT=1; shift ;;
+      -*) echo "onbekend argument: $1" >&2; usage >&2; exit 2 ;;
+      *) hosts+=("$1"); shift ;;
+    esac
+  done
+  [[ ${#hosts[@]} -eq 0 ]] && { usage; exit 2; }
 
   CACHE="$(mktemp -d)"
   trap 'rm -rf "${CACHE}"' EXIT
@@ -156,6 +202,16 @@ main() {
     [[ -z "$host" || "$host" == \#* ]] && continue
     check_host "$host"
   done
+
+  if (( STRICT == 1 )); then
+    if (( FAILURES > 0 )); then
+      echo >&2
+      echo "FAAL: ${FAILURES} gat(en) die niet in de allowlist staan." >&2
+      return 1
+    fi
+    echo
+    echo "strict: geen nieuwe gaten (bekende gaten staan in ${ALLOW:-<geen allowlist>})."
+  fi
 }
 
 main "$@"

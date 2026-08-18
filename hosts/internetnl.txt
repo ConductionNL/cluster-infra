@@ -1,0 +1,38 @@
+# Publieke klanthosts die naar 100% op internet.nl moeten.
+# Gegenereerd uit de Ingresses op het cluster (2026-08-18). Bijwerken:
+#   kubectl get ingress -A -o json | jq -r '.items[].spec.rules[].host' | sort -u
+# en daaruit de eigen klantdomeinen overnemen (niet *.openwoo.app of
+# *.commonground.nu; die zijn geen publieke gemeentelijke ingang).
+acceptatie-open.gooisemeren.nl
+acceptatie-open.hofvantwente.nl
+acceptatie-open.lansingerland.nl
+acceptatie-open.moerdijk.nl
+acceptatie-open.noaberkracht.nl
+acceptatie-open.noordwijk.nl
+acceptatie-open.oude-ijsselstreek.nl
+acceptatie-open.roosendaal.nl
+acceptatie-open.stichtsevecht.nl
+acceptatie-open.tubbergen.nl
+acceptatie-open.zutphen.nl
+demo.conduction.nl
+documenten.open.ede.nl
+open-oud.noaberkracht.nl
+open.buren.nl
+open.dinkelland.nl
+open.ede.nl
+open.epe.nl
+open.gooisemeren.nl
+open.hofvantwente.nl
+open.lansingerland.nl
+open.moerdijk.nl
+open.noaberkracht.nl
+open.noorderzijlvest.nl
+open.oude-ijsselstreek.nl
+open.roosendaal.nl
+open.stichtsevecht.nl
+open.tubbergen.nl
+open.zutphen.nl
+opencatalogi.nl
+test.conduction.nl
+verwerkingsregister.horstaandemaas.nl
+verwerkingsregister.venray.nl

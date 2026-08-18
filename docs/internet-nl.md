@@ -87,6 +87,36 @@ Twee echte defecten, los van IPv6:
   Dat faalt de subtest "certificaat vertrouwd" en dat weegt mee.
 - `open-oud.noaberkracht.nl` heeft geen A-record en antwoordt niet. Dode Ingress.
 
+## Toezicht
+
+| Wat | Waar | Wanneer |
+|---|---|---|
+| render/lint/secrets | pre-push-hooks + `ci.yml` | elke push |
+| buitenkant-meting van de klanthosts | `.github/workflows/internetnl.yml` | maandag 06:00 UTC, en handmatig |
+| certificaat verloopt binnen 14 dagen | `monitoring` → `CertificateExpiringSoon` | continu |
+
+De periodieke meting draait op GitHub-runners en niet in de monitoring-stack:
+deze check mag niet afhangen van één cluster. Hij draait `internetnl-precheck.sh`
+met `--strict` tegen `hosts/internetnl.txt` en faalt alleen op gaten die niet in
+`hosts/internetnl-allow.txt` staan. Die allowlist is een werkvoorraad, geen
+vrijbrief — hij hoort te krimpen.
+
+Een live meting hoort **niet** in een pre-push-hook. Vóór de deploy bestaat de
+stand die je wil meten nog niet, en een netwerkafhankelijke gate maakt de gate
+onbetrouwbaar in plaats van strenger.
+
+Twee gaten in het toezicht zoals het nu staat:
+
+- `CertificateExpiringSoon` leest `certmanager_certificate_expiration_timestamp_seconds`
+  en ziet dus **alleen certificaten die cert-manager beheert**. Het handmatig
+  gezaaide Sectigo-certificaat van `open.noorderzijlvest.nl` (tot 27 november
+  2026) wordt door niets bewaakt. Een blackbox-exporter met
+  `probe_ssl_earliest_cert_expiry` zou dat wel zien, plus een kapotte chain en
+  een host die niet over IPv6 te bereiken is. Nog niet ingericht.
+- De wekelijkse meting dekt de 33 klanthosts, niet de 121
+  `*.commonground.nu`-hosts. Die staan op dezelfde LB en dezelfde nginx, dus de
+  uitkomst is voorspelbaar — maar voorspeld is niet gemeten.
+
 ## Wat er voor 100% moet gebeuren
 
 Op volgorde van gewicht:
