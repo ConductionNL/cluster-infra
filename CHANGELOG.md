@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-08-18 (later 8) — IPv6 werkt op de canary
+
+`canary.openwoo.app` staat achter de Cloudflare-proxy en is over IPv6 bereikbaar:
+status 200 en 5 MB inhoud over v6, edge-cert van Google Trust Services, en onze
+headers komen ongeschonden door (HSTS, nosniff, XFO, Referrer-Policy, CSP in
+Report-Only).
+
+Dat bewijst het punt dat niet gedocumenteerd stond: de SSL-actie van een
+Configuration Rule werkt óók op deze route. Gold hij niet, dan had de zone-modus
+`flexible` gegolden en had de 308-naar-https van onze origin een redirect-lus
+gegeven.
+
+Twee bevindingen. external-dns draait de proxy-vlag **niet** terug — de
+accept-canary stond dagen geproxied terwijl external-dns dat record bezit, dus een
+portaalklik is stille drift. En twee niveaus diep breekt: Universal SSL dekt
+`*.openwoo.app` maar niet `*.accept.openwoo.app`; die host gaf een
+TLS-handshakefout en staat weer op DNS only (`Verify return code: 0`, 200).
+
 ## 2026-08-18 (later 7) — Cloudflare via de API: controleren en de rule zetten
 
 Twee scripts. `cf-verify.sh` leest de zone-SSL-modus, het fallback-origin-record,

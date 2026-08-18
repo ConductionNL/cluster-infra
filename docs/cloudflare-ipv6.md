@@ -168,6 +168,40 @@ Daarna nagemeten: de apex en `www` geven nog steeds hun 301 naar conduction.nl,
 maar valideert het origin-certificaat niet — en dat kan hier juist wel, want elke
 host presenteert een vertrouwd certificaat op zijn eigen naam.
 
+## Canary-uitkomst (2026-08-18)
+
+`canary.openwoo.app` staat achter de proxy en werkt over IPv6:
+
+    A        104.21.60.114, 172.67.195.232   (Cloudflare)
+    AAAA     2606:4700:3035::ac43:c3e8, 2606:4700:3034::6815:3c72
+    server   cloudflare, cf-ray ...-AMS
+    cert     Google Trust Services (edge), origin-cert bleef het openwoo-wildcard
+    IPv6     status 200, 5.065.692 bytes binnengehaald
+
+Daarmee is bewezen wat niet gedocumenteerd stond: de **SSL-actie van een
+Configuration Rule werkt**. De regel staat op Full (strict); had die niet
+gegolden, dan zou de zone-modus `flexible` gelden en had onze origin met een 308
+naar https een redirect-lus opgeleverd. Er komt een 200 met inhoud, dus Cloudflare
+praat over TLS met de origin en accepteert het certificaat.
+
+Onze headers komen ongeschonden door de edge: HSTS, `X-Content-Type-Options`,
+`X-Frame-Options`, `Referrer-Policy` en de CSP in Report-Only.
+
+Twee dingen die de canary aan het licht bracht:
+
+**external-dns draait de proxy-vlag niet terug.** `canary.accept.openwoo.app`
+stond dagen op `proxied=true` terwijl external-dns dat record bezit
+(TXT-registratie aanwezig, `policy: sync`). Een handmatige klik in het portaal
+blijft dus staan — dat is geen geruststelling maar een waarschuwing: de vlag is
+dan drift die niemand ziet. Vandaar dat hij via de Ingress-annotatie hoort te
+komen.
+
+**Twee niveaus diep breekt.** Universal SSL dekt `openwoo.app` en
+`*.openwoo.app`, maar niet `*.accept.openwoo.app`. Die accept-host gaf een
+TLS-handshakefout zolang hij geproxied stond; teruggezet op DNS only en daarna
+weer `Verify return code: 0`, status 200. Voor accept-hosts is Advanced
+Certificate Manager nodig (betaalde add-on), of ze blijven IPv4-only.
+
 ## Certificaatautoriteit en CAA
 
 De CA van het edge-certificaat kies je op non-Enterprise niet zelf: Cloudflare
