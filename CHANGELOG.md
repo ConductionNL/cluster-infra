@@ -1,5 +1,44 @@
 # Changelog
 
+## 2026-08-18 (later 6) — wildcard voor commonground.nu: certificaat eerst
+
+Dit is de rem op de Gateway-migratie van de Nextcloud-kant. Elke host onder
+`commonground.nu` heeft nu een eigen HTTP-01-certificaat, dus elke tenant vraagt
+een eigen listener op de gedeelde Gateway met een eigen `certificateRef`. Werkt
+voor één canary, niet voor 84.
+
+Zelfde patroon als `wildcard-openwoo`, dat sinds 2026-06-30 draait:
+
+- `cert-manager/clusterissuer-letsencrypt-dns.yaml` — `commonground.nu` erbij in
+  de solver-selector, naast `openwoo.app`.
+- `cert-manager/wildcard-commonground-certificate.yaml` — nieuw, voor
+  `*.commonground.nu` en `*.accept.commonground.nu`.
+
+**Bewijs dat het token deze zone aankan, zonder het secret te lezen:**
+external-dns bezit TXT-eigenaarsrecords in `commonground.nu`
+(`heritage=external-dns,...owner=conduction-cluster` op
+`canary.accept.commonground.nu`, gemeten 2026-08-18). Een record schrijven
+vereist eerst een zone-lookup, dus Zone:Read én DNS:Edit zijn beide aantoonbaar
+aanwezig. Dat is precies wat de DNS-01-solver vraagt. De comment in de issuer
+waarschuwde daar expliciet voor.
+
+**Reflector-scope is strakker dan bij openwoo, en dat is opzet.** Het
+openwoo-secret gaat naar élke tenant-namespace, want daar leest de Ingress het
+zelf. Dit certificaat gaat alleen naar `envoy-gateway-system`: de Gateway
+termineert centraal. De blast radius van deze private key is één namespace in
+plaats van vijftig — dit wildcard is dus veiliger dan het bestaande.
+
+**Bewust nog géén Gateway-listener in deze stap.** Een listener met een
+`certificateRef` naar een secret dat nog niet bestaat zet de hele Gateway op
+`Programmed=False` — dat is vandaag al een keer gebeurd toen de ReferenceGrant
+werd gepruned. Dus: eerst uitgifte bewijzen, dan pas de listener, dan pas de
+canary verplaatsen en de per-host listener weghalen. Drie stappen, drie bewijzen.
+
+Meegewijzigd in `docs/gateway-api.md`: de wildcard-route, plus een correctie op
+het tenant-voorbeeld — `sectionName` hoort bij de Nextcloud-route en
+`frontendSectionName` bij de frontend. Eén gedeeld veld hing vandaag de frontend
+van canary-accept aan de verkeerde listener.
+
 ## 2026-08-18 (later 11) — verweesde DNS-records geadopteerd
 
 Bij de IPv6-uitrol bleven hosts achter terwijl hun app en Ingress wél om waren.

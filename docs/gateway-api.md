@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-08-17
+last_reviewed: 2026-08-18
 owner: info@conduction.nl
 ---
 
@@ -41,10 +41,17 @@ Een tenant zet het aan in zijn bestand onder
     gateway:
       frontend: true
       nextcloud: true
-      sectionName: https-<listener>
+      sectionName: https-<listener>        # de Nextcloud-listener
+      frontendSectionName: https-<listener> # alleen bij een custom domein
 
 Beide vlaggen staan los, want een tenant kan zijn frontend eerder migreren dan
-zijn Nextcloud. Zonder `gateway:`-blok rendert er niets extra's — bestaande
+zijn Nextcloud. De twee `sectionName`-velden staan óók los, en dat is geen
+overbodige precisie: frontend en Nextcloud zitten per definitie op verschillende
+listeners met verschillende hostnames en certificaten. Eén gedeeld veld hing op
+2026-08-18 de frontend van canary-accept aan de commonground.nu-listener, met
+`Accepted=False (NoMatchingListenerHostname)` tot gevolg. `frontendSectionName`
+kan bijna altijd weg — de chart-default `https-openwoo` klopt voor elke host
+onder het wildcard. Zonder `gateway:`-blok rendert er niets extra's — bestaande
 tenants zien geen enkele wijziging in hun values, ook niet in de vorm van een
 `enabled: false`. Dat is opzet: een blok dat altijd wordt meegegeven zou alle 84
 Applications tegelijk laten hersyncen.
