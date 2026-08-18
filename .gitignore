@@ -43,3 +43,5 @@ tmp/
 temp/
 *.tmp
 *.bak
+# Back-ups van het tls-sigalgs-script: cluster-staat, hoort niet in git.
+backup/

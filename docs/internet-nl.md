@@ -87,6 +87,19 @@ Twee echte defecten, los van IPv6:
   Dat faalt de subtest "certificaat vertrouwd" en dat weegt mee.
 - `open-oud.noaberkracht.nl` heeft geen A-record en antwoordt niet. Dode Ingress.
 
+## SHA-224 uitzetten
+
+Weegt niet mee in de score (`kex_hash_func` staat op INFO) maar staat wel in de
+audit. De ECDSA-omzetting loste het **niet** op: `RSA+SHA224` wordt sindsdien
+geweigerd omdat de sleutel geen RSA meer is, maar `ECDSA+SHA224` levert nog een
+signatuur op. Gemeten 2026-08-18 op beide Noaberkracht-hosts.
+
+De fix is een globale `http-snippet` op de controller-ConfigMap, en die ConfigMap
+staat in geen enkele repo. Daarom niet met de hand patchen maar via
+`./scripts/tls-sigalgs-apply.sh`: die maakt eerst een back-up, patcht, verifieert
+dat SHA-224 écht geweigerd wordt én dat de hosts nog antwoorden, en draait zelf
+terug als dat niet klopt. Zonder `--apply` is het een dry-run.
+
 ## Toezicht
 
 | Wat | Waar | Wanneer |

@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-08-18 (later 3) — SHA-224 uitzetten met back-up en zelfrollback
+
+`tls-sigalgs-apply.sh` zet de `http-snippet` met `ssl_conf_command
+SignatureAlgorithms` op de controller-ConfigMap. Niet als losse `kubectl patch`,
+om twee redenen: die ConfigMap staat in geen repo (Helm-release `nginx`, geen
+Argo-app), en de wijziging raakt de hele vloot plus Nextcloud.
+
+Het script maakt eerst een back-up, patcht, en verifieert daarna twee dingen: dat
+`ECDSA+SHA224` daadwerkelijk geweigerd wordt én dat de smoke-hosts nog
+antwoorden. Klopt dat niet binnen `WAIT_SECONDS`, dan draait hij zelf terug.
+Zonder `--apply` is het een dry-run. `backup/` staat in `.gitignore`:
+clusterstaat hoort niet in git.
+
+Meting die hierbij hoort: de ECDSA-omzetting loste SHA-224 NIET op. `RSA+SHA224`
+wordt geweigerd omdat de sleutel geen RSA meer is, maar `ECDSA+SHA224` gaf op
+beide Noaberkracht-hosts nog een signatuur.
+
 ## 2026-08-18 (later 2) — periodieke buitenkant-meting als gate
 
 `internetnl-precheck.sh` kreeg `--strict` en `--allow`: hij faalt alleen op gaten
