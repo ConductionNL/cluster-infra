@@ -81,10 +81,17 @@ Ingress staan — die is stale.
 
 Twee echte defecten, los van IPv6:
 
-- `open.noorderzijlvest.nl` serveert **alleen het leaf-certificaat**, zonder
-  intermediate (`unable to get local issuer certificate`). Het is een
-  Sectigo-cert, geldig tot 27 november 2026, handmatig gezaaid (`issuer: none`).
-  Dat faalt de subtest "certificaat vertrouwd" en dat weegt mee.
+- `open.noorderzijlvest.nl` serveerde **alleen het leaf-certificaat**, zonder
+  intermediate. **Gerepareerd 2026-08-18**: de intermediate stond in de
+  AIA-extensie van het leaf zelf
+  (`http://crt.sectigo.com/SectigoPublicServerAuthenticationCADVR36.crt`), dus
+  daar was de klant niet voor nodig. Alleen `tls.crt` in het secret vervangen,
+  private key onaangeroerd; `Verify return code: 0`, de server stuurt nu twee
+  certificaten. De sleutel blijft RSA-2048, dus die host haalt nog geen 100%.
+  Het `Certificate`-object voor deze secret verwijst naar een ClusterIssuer die
+  niet bestaat (`cert-manager-issuer-prod`) en hangt daardoor permanent in
+  `Issuing=True`; het kan dus niets overschrijven. Restant van de omzetting naar
+  `issuer: none`, hoort opgeruimd.
 - `open-oud.noaberkracht.nl` heeft geen A-record en antwoordt niet. Dode Ingress.
 
 ## SHA-224 uitzetten

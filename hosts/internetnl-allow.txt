@@ -6,7 +6,8 @@
 #   IPv6     de loadbalancer is IPv4-only (zie docs/cloudflare-ipv6.md)
 #   sleutel  RSA-2048 bij tenants met een handmatig gezaaid certificaat
 #   DNSSEC   conduction.nl is niet ondertekend
-#   cert     open.noorderzijlvest.nl serveert geen intermediate; TE REPAREREN
+#   cert     (geen meer — noorderzijlvest is 2026-08-18 gerepareerd met de
+#            intermediate uit de AIA-extensie van het leaf)
 #   HSTS     open-oud.noaberkracht.nl is dood; TE VERWIJDEREN
 #
 acceptatie-open.gooisemeren.nl IPv6
@@ -43,7 +44,6 @@ open.moerdijk.nl IPv6
 open.noaberkracht.nl IPv6
 open.noorderzijlvest.nl HSTS
 open.noorderzijlvest.nl IPv6
-open.noorderzijlvest.nl cert
 open.noorderzijlvest.nl sleutel
 open.oude-ijsselstreek.nl IPv6
 open.oude-ijsselstreek.nl sleutel

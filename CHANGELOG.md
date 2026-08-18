@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-08-18 (later 4) — certificaatketen noorderzijlvest gerepareerd
+
+`open.noorderzijlvest.nl` serveerde alleen het leaf-certificaat. De intermediate
+stond in de AIA-extensie van dat leaf, dus ophalen kon zonder de klant. Alleen
+`tls.crt` in het secret vervangen (private key onaangeroerd), keten valideert nu
+tot Sectigo Root R46 en de server stuurt twee certificaten.
+
+Dat is een subtest die meeweegt in de internet.nl-score, dus de regel
+`open.noorderzijlvest.nl cert` is uit `hosts/internetnl-allow.txt` gehaald: de
+wekelijkse gate slaat vanaf nu aan als de keten terugvalt.
+
 ## 2026-08-18 (later 3) — SHA-224 uitzetten met back-up en zelfrollback
 
 `tls-sigalgs-apply.sh` zet de `http-snippet` met `ssl_conf_command
