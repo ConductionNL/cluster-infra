@@ -53,6 +53,78 @@ bestaande Let's Encrypt-certificaat volstaat en Full (strict) houdt. Gebruik
 **geen** custom origin per hostname: dan wijkt SNI af van de Host-header en is
 strict onmogelijk zonder Enterprise-entitlement.
 
+## Zoals ingericht (2026-08-18)
+
+Gemeten en aangelegd tijdens de eerste uitrol voor Noaberkracht:
+
+| Wat | Waarde |
+|---|---|
+| SaaS-zone | `openwoo.app` |
+| fallback origin | `saas.openwoo.app` → A `81.24.6.82`, proxied |
+| custom hostnames | `open.dinkelland.nl`, `open.tubbergen.nl` |
+| minimum TLS | 1.2 |
+| DCV | Delegated DCV, doel `<hostname>.7f19f08d5865daf8.dcv.cloudflare.com` |
+
+Drie dingen die anders bleken dan gepland:
+
+**De naam `customers.openwoo.app` was niet vrij.** In deze zone staat een
+wildcard `*.openwoo.app` → `81.24.6.45`, en dat IP is geen service in dit cluster
+(hier zijn alleen `81.24.6.82` voor nginx en `81.24.11.239` voor Envoy). Elke naam
+zonder eigen record valt door naar dat andere cluster. Vandaar `saas` als
+expliciet record — dat overruled de wildcard voor die ene naam.
+
+**De zone staat op Flexible en dat kon niet zone-breed om.** De records die daar
+al geproxied zijn (`openwoo.app` apex en `conduction.openwoo.app`) komen uit op
+`81.24.6.45`, dat alleen het *Kubernetes Ingress Controller Fake Certificate*
+presenteert. Full (strict) zone-breed zou die twee een 526 geven.
+
+Flexible laten staan kon ook niet: onze origin antwoordt op HTTP met een **308
+naar https**, dus Cloudflare zou een redirect-lus opleveren.
+
+Oplossing: een **Configuration Rule** per hostnaam, zone blijft Flexible.
+
+    (http.host eq "open.dinkelland.nl") or (http.host eq "open.tubbergen.nl")
+    → SSL: Full (strict)
+
+Dat schaalt met een negatieve match, want een custom hostname is per definitie
+geen naam in deze zone:
+
+    (not http.host ends_with ".openwoo.app") and (http.host ne "openwoo.app")
+
+Cloudflare waarschuwt bij het opslaan dat er geen geproxied record voor die
+hostnaam bestaat. Dat is bij Cloudflare for SaaS normaal — de naam staat in de
+zone van de klant. Negeren en deployen; géén record voor de klanthostnaam in onze
+zone aanmaken.
+
+**Nog te bewijzen:** dat de SSL-actie van een Configuration Rule ook op
+custom-hostname-verkeer werkt. Gedocumenteerd per custom hostname zijn minimum
+TLS-versie en cipher suites, de modus niet. Daarom test de edge vóór de cutover:
+
+    EDGE_IP=<cloudflare-ip> ./scripts/check-saas-hostname.sh open.dinkelland.nl
+
+Krijgen we een redirect-lus of 526, dan valt deze route af zonder dat de klant
+iets merkt.
+
+## Certificaatautoriteit en CAA
+
+De CA van het edge-certificaat kies je op non-Enterprise niet zelf: Cloudflare
+mag uit Let's Encrypt, Google Trust Services en SSL.com kiezen en kan wisselen.
+Een CAA-record op een klanthostnaam moet daarom alle drie toestaan, of er moet
+geen CAA staan. Eén CA noemen breekt een latere vernieuwing.
+
+## DANE
+
+Valt met deze route af. Cloudflare publiceert TLSA als recordtype en heeft sinds
+april 2026 DANE voor MX, maar niets voor het edge-certificaat van een geproxiede
+website — dat certificaat is van hen en rouleert. Weegt niet mee in de
+internet.nl-score (INFO/NOTICE), maar hoort expliciet naar de klant.
+
+## Nextcloud niet
+
+`*.commonground.nu` mag hier niet achter: Cloudflare kapt de request body af op
+100 MB (Free en Pro), terwijl de Nextcloud-ingress `proxy-body-size: 16G` en
+timeouts van 1800s heeft. IPv6 voor die hosts wacht op de hostingleverancier.
+
 ## Wat dit raakt
 
 - **Origin-certificaat**: met de proxy ervoor loopt HTTP-01 door de edge. Een

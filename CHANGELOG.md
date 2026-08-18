@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-08-18 (later 5) — Cloudflare for SaaS ingericht voor de twee Noaberkracht-hosts
+
+`docs/cloudflare-ipv6.md` bevat nu de as-built: SaaS-zone `openwoo.app`, fallback
+origin `saas.openwoo.app` (proxied A naar de nginx-LB), custom hostnames voor
+open.dinkelland.nl en open.tubbergen.nl, minimum TLS 1.2, Delegated DCV.
+
+Drie dingen bleken anders dan gepland. `customers.openwoo.app` was niet vrij: er
+staat een wildcard `*.openwoo.app` naar een IP buiten dit cluster. De zone staat
+op Flexible en kan niet zone-breed naar Full (strict), want de al geproxiede
+records komen uit op een ingress die alleen het fake default-certificaat
+presenteert. En Flexible laten staan kon ook niet, want onze origin antwoordt op
+HTTP met een 308 naar https — dat is een redirect-lus. Oplossing: een
+Configuration Rule per hostnaam, met een negatieve match die met de vloot
+meeschaalt.
+
+Nog te bewijzen vóór de cutover: dat de SSL-actie van een Configuration Rule ook
+op custom-hostname-verkeer werkt. Dat is niet gedocumenteerd en wordt gemeten met
+`check-saas-hostname.sh` via `EDGE_IP`, zonder dat de klant iets merkt.
+
+Verder vastgelegd: de CA van het edge-certificaat is op non-Enterprise niet te
+kiezen (Let's Encrypt, Google Trust Services of SSL.com), dus een CAA-record moet
+alle drie toestaan of ontbreken. DANE valt met deze route af.
+
 ## 2026-08-18 (later 4) — certificaatketen noorderzijlvest gerepareerd
 
 `open.noorderzijlvest.nl` serveerde alleen het leaf-certificaat. De intermediate
