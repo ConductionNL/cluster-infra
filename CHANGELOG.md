@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-08-18 — IPv6 via Cloudflare: onderzoek, runbook en meetscripts
+
+De LB is IPv4-only, dus IPv6 (audit open.dinkelland.nl) moet van de edge komen.
+Twee routes vastgelegd in `docs/cloudflare-ipv6.md`: proxy-vlag voor onze eigen
+zones, Cloudflare for SaaS custom hostnames voor klantdomeinen. Subdomein-zone
+delegeren kan niet (Enterprise-only). Kosten: $0 tot 100 hostnamen.
+
+Twee read-only meetscripts: `check-cloudflare-proxy.sh` (test A, incl. `--watch`
+om te zien of external-dns de proxy-vlag terugdraait) en
+`check-saas-hostname.sh` (test B, ook vóór cutover te draaien via `EDGE_IP`).
+
+Nog geen besluit en niets aangezet in het portaal.
+
 ## 2026-08-17 (later) — routes naar de generators, tijdelijke constructie weg
 
 De canary-routes stonden in deze repo omdat de generators van Nextcloud-base en
