@@ -202,25 +202,61 @@ TLS-handshakefout zolang hij geproxied stond; teruggezet op DNS only en daarna
 weer `Verify return code: 0`, status 200. Voor accept-hosts is Advanced
 Certificate Manager nodig (betaalde add-on), of ze blijven IPv4-only.
 
-## Vloot-uitrol en de accept-grens
+## Vloot-uitrol: wie heeft IPv6
 
 De proxy-vlag is geautomatiseerd in de ApplicationSet van React-base: **default
-aan voor de live-omgeving, uit voor accept**, met `frontend.proxied` als
-overrule in beide richtingen. Gemeten stand van de vloot op 2026-08-18:
+aan voor beide omgevingen**, met `frontend.proxied: false` als uitzondering per
+tenant. Voor accept kan dat sinds het advanced certificate pack op
+`accept.openwoo.app` + `*.accept.openwoo.app` (besteld 2026-08-18, `active`,
+Google Trust Services, auto-renew, 1 van 100 advanced certificates).
 
-| Groep | Aantal | Wat er gebeurt |
-|---|---|---|
-| live onder `*.openwoo.app` | 17 | krijgen de proxy, dus AAAA |
-| live op een klantdomein | 12 | annotatie is een no-op; die lopen via Cloudflare for SaaS |
-| accept | 38 | blijven DNS-only tot ACM |
+Gemeten stand:
 
-**Accept meedoen kost Advanced Certificate Manager.** Universal SSL dekt
-`openwoo.app` en `*.openwoo.app`, niet `*.accept.openwoo.app`. Met ACM (betaalde
-add-on per zone) plus Total TLS krijgen ook hostnamen een niveau dieper een
-edge-certificaat; dan kan de default voor accept om. Zonder ACM is een geproxiede
-accept-host stuk, niet langzaam — TLS-handshakefout, gemeten.
+    gemeten 2026-08-18 21:20 CEST
+    live-openwoo    17 van 25
+    accept-openwoo  25 van 42
+    klantdomein     5 van 46
+    commonground.nu 0 van 121 (kan niet via deze route)
 
-Support-antwoorden voor deze drie gevallen staan in `mail-ipv6-support.md`.
+Die telling is een momentopname midden in de uitrol: external-dns werkt de
+records per tenant bij en resolvers cachen een leeg AAAA-antwoord even na. Meet
+zelf in plaats van dit getal te vertrouwen:
+
+    ./scripts/check-cloudflare-proxy.sh <host>          # eigen zone
+    ./scripts/check-saas-hostname.sh <klanthost>        # klantdomein
+
+| Groep | Route naar IPv6 |
+|---|---|
+| `*.openwoo.app` (live) | proxy-vlag; edge-cert is het universal pack |
+| `*.accept.openwoo.app` | proxy-vlag; edge-cert is het advanced pack (`CN=accept.openwoo.app`) |
+| klantdomeinen (`open.*.nl`) | Cloudflare for SaaS; wacht op twee CNAME's van de klant |
+| `*.commonground.nu` (Nextcloud) | **kan niet** via deze route — 100 MB bodylimiet tegen `proxy-body-size: 16G` |
+
+De klantdomeinen die nu al AAAA hebben, staan niet op onze loadbalancer
+(`open.ede.nl`, `open.lansingerland.nl`, `opencatalogi.nl`); die IPv6 komt van een
+ander platform.
+
+Aan het certificaat zie je welk pad een accept-host loopt: `CN=accept.openwoo.app`
+is de edge, `CN=*.openwoo.app` is onze origin en dus nog niet omgezet.
+
+Verdwijnt het advanced pack, dan moet de default weer per omgeving — anders geeft
+een accept-host een TLS-handshakefout. Dat staat als voorwaarde in de template.
+
+Support-antwoorden per situatie: `mail-ipv6-support.md`.
+
+## Wat de uitrol niet meeneemt
+
+Dertien frontend-Applications hebben geen revisie in hun status en renderen de
+annotatie dus niet: `bct-accept`, `beek-accept`, `beek-live`, `ede-accept`,
+`ede-live`, `koophulpje-live`, `odmh-accept`, `soest-accept`, `soest-live`,
+`stichtsevecht-live`, `test-accept`, `vaals-accept`, `zandbak-010-live`
+(suffix `-reactfront`; waar hier "live" staat is dat de productie-variant).
+Gecontroleerd op `soest`: `cloudflare-proxied` staat niet in de Helm-values van
+die Application, terwijl het bij `baarn` en `helmond` wél staat.
+
+Die apps volgen de huidige ApplicationSet dus niet. Ze krijgen geen IPv6, en ook
+geen andere platformwijziging — dat is een groter punt dan IPv6 alleen en hoort
+apart uitgezocht.
 
 ## Certificaatautoriteit en CAA
 

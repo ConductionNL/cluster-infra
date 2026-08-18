@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-08-18 (later 10) — accept doet mee, docs op de gemeten stand
+
+Advanced certificate pack besteld en `active` op `accept.openwoo.app` +
+`*.accept.openwoo.app` (Google Trust Services, auto-renew). De ACM-entitlement
+zat al op het plan — 0 van 100 advanced certificates in gebruik — dus er was
+niets te kopen; alleen te bestellen. Daarna staat de proxy-default in React-base
+aan voor beide omgevingen.
+
+`docs/cloudflare-ipv6.md` heeft nu de gemeten stand in plaats van een tabel met
+verwachtingen, met de waarschuwing dat het een momentopname is: external-dns
+werkt per tenant bij en resolvers cachen een leeg AAAA-antwoord na.
+`mail-ipv6-support.md` sectie 3 is omgedraaid: accept is geregeld, met de
+certificaatregel als check (`CN=accept.openwoo.app` = via de edge,
+`CN=*.openwoo.app` = nog niet omgezet).
+
+`mail-ipv6-klant.md` is klaar-voor-gebruik: de DCV-bestemming staat er letterlijk
+in (per zone vast) en er staat bij wat je vóór verzending zelf moet doen.
+
+Bevinding uit de uitrol: dertien frontend-Applications hebben geen revisie in hun
+status en renderen de annotatie niet. Op `soest` gecontroleerd: `cloudflare-proxied`
+staat niet in hun Helm-values, terwijl het bij `baarn` en `helmond` wél staat. Die
+apps volgen de huidige ApplicationSet dus niet — dat raakt meer dan IPv6 en staat
+als apart punt in de docs.
+
 ## 2026-08-18 (later 9) — vloot-default, accept-grens en support-antwoorden
 
 De proxy-vlag is nu een default in de ApplicationSet van React-base: aan voor

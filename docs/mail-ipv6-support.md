@@ -33,21 +33,21 @@ SSL/TLS → Custom Hostnames.
 Zet stap 2 pas in de mail nadat de edge gemeten is met
 `check-saas-hostname.sh`.
 
-## 3. Acceptatie-omgeving (`*.accept.openwoo.app`) — nog niet, en dat is bewust
+## 3. Acceptatie-omgeving (`*.accept.openwoo.app`) — ook geregeld
 
-> Beste [naam],
->
-> IPv6 staat aan op de live-omgeving. Op de acceptatie-omgeving nog niet: die
-> hostnaam ligt een niveau dieper en valt buiten het certificaat dat ons CDN
-> daarvoor standaard uitgeeft. We kunnen dat aanzetten, maar dat vraagt een
-> uitbreiding aan onze kant en die staat op de planning.
->
-> Voor de audit maakt dat geen verschil: die kijkt naar de live-omgeving.
+Sinds 2026-08-18 doen de acceptatie-omgevingen mee. Er staat een apart
+certificaat op `accept.openwoo.app` + `*.accept.openwoo.app`, waardoor die
+hostnamen ook via het CDN kunnen. Antwoord dus hetzelfde als bij situatie 1:
+geregeld, klant hoeft niets.
 
-Zet dit **niet** zelf aan door de proxy-vlag op een accept-host te zetten. Dat
-geeft een TLS-handshakefout — gemeten op `canary.accept.openwoo.app`
-(2026-08-18). Er is Advanced Certificate Manager voor nodig; zie
-`cloudflare-ipv6.md`.
+Controleer het wel per host, want de uitrol loopt per tenant:
+
+    cluster-infra/scripts/check-cloudflare-proxy.sh <host>
+
+Staat er `CN=accept.openwoo.app` in de certificaatregel, dan loopt die host via
+het CDN. Staat er `CN=*.openwoo.app`, dan is die tenant nog niet omgezet; dat komt
+goed zodra external-dns het record bijwerkt. Blijft het hangen, meld het bij de
+beheerder — een handvol Applications volgt de huidige uitrol niet.
 
 ## Wat je nooit belooft
 
