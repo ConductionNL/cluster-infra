@@ -105,6 +105,47 @@ TLS-versie en cipher suites, de modus niet. Daarom test de edge vóór de cutove
 Krijgen we een redirect-lus of 526, dan valt deze route af zonder dat de klant
 iets merkt.
 
+## Onze eigen hosts onder `*.openwoo.app`
+
+Hier is geen Cloudflare for SaaS nodig: die namen staan in onze zone, dus de
+proxy-vlag is de hele oplossing. Twee dingen maken dit gunstiger dan bij een
+klantdomein.
+
+**Het certificaat komt van DNS-01.** De hosts vallen onder één wildcard
+(`*.openwoo.app` + `*.accept.openwoo.app`, Certificate `wildcard-openwoo`,
+ClusterIssuer `letsencrypt-dns`). De vernieuwing loopt dus niet via een
+HTTP-challenge door de edge, maar via een TXT-record in onze eigen zone. Proxyen
+raakt die keten niet. Dat is precies het risico dat bij een klantdomein wél
+speelt.
+
+**Full (strict) kan hier gewoon**, want de origin presenteert dat wildcard voor
+elke `*.openwoo.app`-host.
+
+De Configuration Rule moet dan wel ruimer dan alleen de klanthostnamen. Eén regel
+die zowel custom hostnames als onze eigen tenants dekt en precies de twee kapotte
+uitzonderingen overslaat:
+
+    (http.host ne "openwoo.app") and (http.host ne "conduction.openwoo.app")
+    → SSL: Full (strict)
+
+Die twee zijn uitgezonderd omdat ze uitkomen op `81.24.6.45`, dat alleen het
+fake default-certificaat presenteert; Full (strict) zou daar een 526 geven.
+
+**De proxy-vlag zet je niet in het portaal.** external-dns bezit deze records
+(`policy: sync`) en zet `proxied` standaard op false, dus een dashboard-klik
+loopt het risico teruggedraaid te worden. Het hoort via de Ingress:
+
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
+
+Dat is een annotatie in `react-platform/values/common.yaml` (ingress.annotations)
+in React-base. Platformwijziging, dus canary eerst en dan de waves volgens
+`ROLLOUTS.md`. Voor de custom-domain tenants is die annotatie een no-op:
+external-dns beheert alleen `commonground.nu`, `openwoo.app` en `opencatalogi.nl`,
+en een klanthostnaam valt daarbuiten.
+
+Verifiëren per host: `./scripts/check-cloudflare-proxy.sh <host>` — verwacht een
+AAAA, `server: cloudflare` en een werkende IPv6-verbinding.
+
 ## Certificaatautoriteit en CAA
 
 De CA van het edge-certificaat kies je op non-Enterprise niet zelf: Cloudflare

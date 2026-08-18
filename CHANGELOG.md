@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-08-18 (later 6) — standaardmail en de route voor onze eigen zone
+
+`docs/mail-ipv6-klant.md` is de template voor een klantdomein: twee stappen,
+plus expliciet wat er níét in hoort (geen CAA-verzoek, geen DANE-belofte).
+
+`docs/cloudflare-ipv6.md` heeft nu ook de route voor `*.openwoo.app`. Daar is
+geen Cloudflare for SaaS nodig — de namen staan in onze zone, dus de proxy-vlag
+is de hele oplossing. Twee metingen maken dat gunstiger dan bij een klantdomein:
+het wildcard-certificaat komt van `letsencrypt-dns` (DNS-01), dus proxyen raakt
+de vernieuwing niet, en de origin presenteert dat wildcard voor elke host, dus
+Full (strict) kan gewoon.
+
+De Configuration Rule moet daarvoor ruimer: alles behalve de apex en
+`conduction.openwoo.app`, want die twee komen uit op een ingress met het fake
+default-certificaat. En de proxy-vlag hoort niet in het portaal maar op de
+Ingress (`external-dns.alpha.kubernetes.io/cloudflare-proxied`), want
+external-dns bezit die records.
+
 ## 2026-08-18 (later 5) — Cloudflare for SaaS ingericht voor de twee Noaberkracht-hosts
 
 `docs/cloudflare-ipv6.md` bevat nu de as-built: SaaS-zone `openwoo.app`, fallback
