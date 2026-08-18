@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-08-18 (later) — internet.nl: de score-set gemeten, niet aangenomen
+
+Klantomgevingen moeten naar 100%. Uit de bron van internet.nl (categories.py +
+scoring.py) blijkt dat alleen IPv6, DNSSEC, RPKI en het TLS-blok meewegen.
+Headers, security.txt, CAA, DANE, OCSP en de SHA-224-hashfunctie staan op NOTICE
+of INFO en leveren geen procent op — goed om te doen, maar niet hiervoor.
+
+Nieuw script `internetnl-precheck.sh` meet die set per host. Uitkomst over 33
+klanthosts en een steekproef van commonground.nu staat in `docs/internet-nl.md`.
+Kort: IPv6 is het enige punt dat alles raakt (RPKI van ons prefix is al valid),
+13 hosts staan nog op RSA-2048 (internet.nl wil 3072+ of ECDSA),
+`open.noorderzijlvest.nl` serveert een chain zonder intermediate en
+`open-oud.noaberkracht.nl` is dood.
+
+De eerste versie van het script stopte stil na 13 hosts: set -e plus pipefail
+op een `grep` die niets vond. Precies de hosts zonder HSTS of zonder TLS vielen
+zo buiten de meting — de interessante dus.
+
 ## 2026-08-18 — IPv6 via Cloudflare: onderzoek, runbook en meetscripts
 
 De LB is IPv4-only, dus IPv6 (audit open.dinkelland.nl) moet van de edge komen.

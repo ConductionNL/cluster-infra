@@ -37,6 +37,8 @@ the `AppProject` lives in `argo/projects/cluster-infra.yaml`.
 - [Gateway API naast ingress-nginx](gateway-api.md) — waarom, hoe de
   onderdelen samenhangen, bootstrap-volgorde en de canary-validatie
   (uitleg + how-to).
+- [internet.nl — wat meetelt voor 100%](internet-nl.md) — de score-set,
+  de gemeten stand per klanthost en wat er nog moet.
 - [CAA per zone](caa.md) — wie geeft er nú certificaten uit, en waarom een
   CAA op de zone bijna niets beperkt.
 - [IPv6 via Cloudflare](cloudflare-ipv6.md) — proxy-vlag voor eigen zones,
