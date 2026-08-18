@@ -33,6 +33,11 @@ SSL/TLS → Custom Hostnames.
 Zet stap 2 pas in de mail nadat de edge gemeten is met
 `check-saas-hostname.sh`.
 
+Let op wat de klant terugmeldt: het A-record moet **vervangen** worden door de
+CNAME. Vraagt iemand om "het IPv4-adres van jullie cluster" of om een AAAA van
+ons, dan gaat het mis — ons platform is IPv4-only en de IPv6-bereikbaarheid komt
+van het CDN. Naast een CNAME mag geen A of AAAA staan.
+
 ## 3. Acceptatie-omgeving (`*.accept.openwoo.app`) — ook geregeld
 
 Sinds 2026-08-18 doen de acceptatie-omgevingen mee. Er staat een apart

@@ -59,6 +59,19 @@ te vervangen door:
 Dat is het moment dat het verkeer verschuift. Terugdraaien kan altijd door het
 oorspronkelijke A-record terug te zetten.
 
+## Belangrijk: alleen die CNAME, geen A- of AAAA-record
+
+Het A-record vervalt en er komt **geen** A- of AAAA-record naast de CNAME. Ook
+niet een AAAA met een adres van ons: ons platform is IPv4-only, de
+IPv6-bereikbaarheid komt van het CDN. Voor een naam met een CNAME mag er
+volgens de DNS-standaard ook niets anders naast staan, dus een achtergebleven
+A-record levert onvoorspelbaar gedrag op.
+
+Kort samengevat wat er onder [hostnaam] hoort te staan:
+
+    [hostnaam].                  CNAME  saas.openwoo.app.        (in plaats van het A-record)
+    _acme-challenge.[hostnaam].  CNAME  [hostnaam].7f19f08d5865daf8.dcv.cloudflare.com.
+
 ## Verwerkingsafspraak
 
 Het verkeer loopt na stap 2 via Cloudflare, dat de versleuteling beëindigt. Daar

@@ -28,3 +28,11 @@ spec:
         selector:
           dnsZones:
             - "openwoo.app"
+            # commonground.nu erbij voor het Nextcloud-wildcard. Zelfde token,
+            # zelfde solver. Bewijs dat het token deze zone aankan zonder hem te
+            # hoeven lezen: external-dns bezit er TXT-eigenaarsrecords
+            # (`heritage=external-dns,...owner=conduction-cluster` op
+            # canary.accept.commonground.nu, gemeten 2026-08-18). Een record
+            # schrijven vereist eerst een zone-lookup, dus Zone:Read én DNS:Edit
+            # zijn beide aantoonbaar aanwezig — precies wat DNS-01 vraagt.
+            - "commonground.nu"

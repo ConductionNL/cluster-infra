@@ -86,12 +86,25 @@ een canary en schaalt niet naar 84.
 
 De oplossing is dezelfde als die voor openwoo.app al genomen is: een
 wildcard-certificaat voor `*.commonground.nu` en `*.accept.commonground.nu` via
-DNS-01. De zone staat al bij Cloudflare en `letsencrypt-dns` bestaat al. Dat is
-een aparte beslissing en staat als openstaand punt in de change
-`add-gateway-api-bootstrap`.
+DNS-01. Dat certificaat staat sinds 2026-08-18 in
+`cert-manager/wildcard-commonground-certificate.yaml`, en de solver van
+`letsencrypt-dns` is uitgebreid met die zone.
 
-Tot die er is, blijft de per-host listener in `envoy-gateway/config/gateway.yaml`
-handwerk per tenant.
+Dat het Cloudflare-token deze zone aankan is aangetoond zonder het token te
+lezen: external-dns bezit er TXT-eigenaarsrecords, en een record schrijven
+vereist eerst een zone-lookup — dus Zone:Read én DNS:Edit zijn beide aanwezig.
+
+Eén verschil met het openwoo-wildcard, en het is een verbetering. Dat secret
+wordt naar élke tenant-namespace gespiegeld, want daar leest de Ingress het
+zelf. Dit niet: de Gateway termineert centraal, dus het staat alleen in
+`envoy-gateway-system`. De blast radius van die private key is één namespace in
+plaats van vijftig. Houd die scope strak.
+
+De uitrol gaat in drie stappen, elk met een bewijs ertussen — het certificaat
+eerst, dan pas een listener die ernaar verwijst, want een listener met een
+`certificateRef` naar een secret dat nog niet bestaat zet de hele Gateway op
+`Programmed=False`. Zolang de wildcard-listener er niet is, blijft de per-host
+listener in `envoy-gateway/config/gateway.yaml` handwerk per tenant.
 
 ## TLS vandaag
 

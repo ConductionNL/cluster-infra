@@ -1,0 +1,41 @@
+---
+# Wildcard voor de Nextcloud-hosts:
+#   *.commonground.nu          (prod   — bv. zwolle.commonground.nu)
+#   *.accept.commonground.nu   (accept — bv. canary.accept.commonground.nu)
+#
+# Zelfde patroon als wildcard-openwoo, dat sinds 2026-06-30 draait. Dit haalt
+# de per-host HTTP-01-uitgifte weg voor elke tenant die naar de Gateway
+# migreert, en daarmee de rem op die migratie: zonder wildcard heeft élke
+# Nextcloud-host een eigen listener met een eigen certificateRef op de gedeelde
+# Gateway nodig. Dat werkt voor één canary en niet voor 84.
+#
+# BELANGRIJK VERSCHIL met wildcard-openwoo: dat secret wordt naar élke
+# tenant-namespace gespiegeld, want daar leest de Ingress het zelf. Hier niet.
+# De Gateway termineert TLS centraal, dus dit certificaat hoeft alleen in
+# `envoy-gateway-system` te bestaan. De blast radius van deze private key is
+# daarmee één namespace in plaats van vijftig — dit wildcard is dus veiliger
+# dan het bestaande, en die scope moet strak blijven.
+#
+# Zolang een tenant nog op ingress-nginx draait, blijft zijn eigen per-host
+# certificaat bestaan en via HTTP-01 vernieuwen. Dit certificaat vervangt daar
+# niets; het maakt de Gateway-kant mogelijk. Opruimen van de per-host certs
+# hoort bij het weghalen van de Ingress, niet hier.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-commonground
+  namespace: cert-manager
+spec:
+  secretName: wildcard-commonground-tls
+  issuerRef:
+    name: letsencrypt-dns
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.commonground.nu"
+    - "*.accept.commonground.nu"
+  secretTemplate:
+    annotations:
+      reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
+      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: "envoy-gateway-system"
+      reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
+      reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: "envoy-gateway-system"

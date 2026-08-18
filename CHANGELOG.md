@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-08-18 (later 11) — verweesde DNS-records geadopteerd
+
+Bij de IPv6-uitrol bleven hosts achter terwijl hun app en Ingress wél om waren.
+Oorzaak: external-dns werkt met een TXT-registry en raakt alleen records aan waar
+zijn eigen eigendomsrecord bij staat. Voor die hosts bestonden die TXT-records
+niet — met de hand aangemaakt, of verweesd door een wijziging van `txtOwnerId`,
+precies waar `external-dns/values.yaml` voor waarschuwt. Gemeten: 46 van de 67
+hosts in de zone hadden eigendom, de rest niet.
+
+Nieuw `scripts/adopt-dns-records.sh` zet het ontbrekende TXT-eigendom bij (twee
+records per host, `<host>` en `a-<host>`), waarna external-dns het record
+overneemt. Dry-run als default. Twee ingebouwde grenzen: hosts waarvan het
+A-record niet naar onze loadbalancer wijst worden overgeslagen (adoptie zou daar
+verkeer verplaatsen — `barneveld.openwoo.app` staat op een ander cluster), en met
+`--only-annotated` blijven hosts buiten schot waar adoptie niets oplost.
+
+Uitgevoerd op almere en daarna op negen hosts met de proxy-annotatie. Acht van de
+negen hadden binnen enkele minuten AAAA, alle negen geven 200. Elf hosts sloeg het
+script bewust over: dat zijn de legacy-Ingresses zonder proxy-annotatie.
+
+`mail-ipv6-klant.md` en `mail-ipv6-support.md`: expliciet dat het A-record wordt
+**vervangen** door de CNAME en dat er geen A of AAAA naast mag staan — ook niet een
+AAAA met een adres van ons, want het platform is IPv4-only.
+
 ## 2026-08-18 (later 10) — accept doet mee, docs op de gemeten stand
 
 Advanced certificate pack besteld en `active` op `accept.openwoo.app` +
