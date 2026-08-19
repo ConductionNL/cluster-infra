@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-07-10
+last_reviewed: 2026-08-19
 owner: info@conduction.nl
 ---
 
@@ -47,5 +47,8 @@ the `AppProject` lives in `argo/projects/cluster-infra.yaml`.
   CAA op de zone bijna niets beperkt.
 - [IPv6 via Cloudflare](cloudflare-ipv6.md) — proxy-vlag voor eigen zones,
   Cloudflare for SaaS voor klantdomeinen; testrunbook + scripts.
+- [Bevinding (opgelost): de wildcard `*.openwoo.app` ving elke typefout](wildcard-openwoo-app.md)
+  — een typefout landde met een certificaatfout op een gedeprecieerd cluster;
+  wildcard verwijderd op 2026-08-19, met de na-meting (uitleg).
 - [Cloudflare API token](CLOUDFLARE.md) — creating, loading and rotating
   the token external-dns uses (how-to).

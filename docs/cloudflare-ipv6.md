@@ -67,16 +67,27 @@ Gemeten en aangelegd tijdens de eerste uitrol voor Noaberkracht:
 
 Drie dingen die anders bleken dan gepland:
 
-**De naam `customers.openwoo.app` was niet vrij.** In deze zone staat een
+**De naam `customers.openwoo.app` was niet vrij.** In deze zone stond toen een
 wildcard `*.openwoo.app` → `81.24.6.45`, en dat IP is geen service in dit cluster
 (hier zijn alleen `81.24.6.82` voor nginx en `81.24.11.239` voor Envoy). Elke naam
-zonder eigen record valt door naar dat andere cluster. Vandaar `saas` als
+zonder eigen record viel door naar dat andere cluster. Vandaar `saas` als
 expliciet record — dat overruled de wildcard voor die ene naam.
 
+Die wildcard is op 2026-08-19 verwijderd (legacy, gedeprecieerd cluster); een
+niet-bestaande naam geeft nu NXDOMAIN. Het `saas`-record blijft nodig als
+fallback origin. Meting en context: [wildcard-openwoo-app.md](wildcard-openwoo-app.md).
+
 **De zone staat op Flexible en dat kon niet zone-breed om.** De records die daar
-al geproxied zijn (`openwoo.app` apex en `conduction.openwoo.app`) komen uit op
-`81.24.6.45`, dat alleen het *Kubernetes Ingress Controller Fake Certificate*
-presenteert. Full (strict) zone-breed zou die twee een 526 geven.
+al geproxied zijn staan niet op ons cluster maar op **GitHub Pages**:
+`openwoo.app` en `www.openwoo.app` zijn CNAME's naar `conductionnl.github.io`,
+`conduction.openwoo.app` heeft de vier A-records `185.199.108-111.153`. Die
+origin presenteert `CN=*.github.io` — een geldige Let's Encrypt-keten, maar de
+naam matcht niet met `openwoo.app`, dus Full (strict) geeft daar een 526.
+Gemeten 2026-08-19 13:00 CEST.
+
+Eerdere versies van deze pagina schreven die uitzondering toe aan `81.24.6.45`
+en het fake ingress-certificaat. Dat was onjuist: die drie namen komen niet bij
+dat cluster uit.
 
 Flexible laten staan kon ook niet: onze origin antwoordt op HTTP met een **308
 naar https**, dus Cloudflare zou een redirect-lus opleveren.
@@ -128,8 +139,11 @@ uitzonderingen overslaat:
     (http.host ne "openwoo.app") and (http.host ne "conduction.openwoo.app")
     → SSL: Full (strict)
 
-Die twee zijn uitgezonderd omdat ze uitkomen op `81.24.6.45`, dat alleen het
-fake default-certificaat presenteert; Full (strict) zou daar een 526 geven.
+Die twee zijn uitgezonderd omdat ze op GitHub Pages uitkomen, dat `CN=*.github.io`
+presenteert: geldige keten, verkeerde naam, dus Full (strict) geeft er een 526.
+Wordt voor die namen ooit een GitHub-Pages-certificaat op het eigen domein
+uitgegeven, dan kan de uitzondering vervallen — dat is nog niet gemeten of
+aangevraagd.
 
 **De proxy-vlag zet je niet in het portaal.** external-dns bezit deze records
 (`policy: sync`) en zet `proxied` standaard op false, dus een dashboard-klik

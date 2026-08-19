@@ -1,5 +1,56 @@
 # Changelog
 
+## 2026-08-19 — wildcard `*.openwoo.app` weg: typefouten geven nu NXDOMAIN
+
+Los van het IPv6-dossier, want het effect is burgerzichtbaar en de IPv6-route
+heeft dat niet. Nieuwe pagina `docs/wildcard-openwoo-app.md`: status open,
+eigenaar platformbeheer cluster-infra, met de meting van 2026-08-19 12:37 CEST.
+
+Wat gemeten is: elke naam onder `openwoo.app` zonder eigen record valt door naar
+`81.24.6.45`. Die host presenteert het *Kubernetes Ingress Controller Fake
+Certificate* (verify code 18) en geeft daarachter **HTTP 200** met een generieke
+OpenCatalogi-frontend van 3,2 MB — geen 404. Een typefout in een gemeentelijke
+URL levert dus eerst een certificaatwaarschuwing op en daarna een site die op een
+WOO-site lijkt maar niet die van de gemeente is, op een host die in geen enkele
+repo hier voorkomt. Netblok `81.24.4.0/22` (`FUGA_AMS`), hetzelfde als onze
+loadbalancer, dus vermoedelijk dezelfde leverancier — eigenaar onbekend.
+
+Drie opties in de pagina (wildcard weg, wildcard naar een beheerde 404, of niets
+doen), met de blokkerende vraag: van wie is `81.24.6.45`. Gekruislinkt vanuit
+`docs/index.md` en `docs/cloudflare-ipv6.md`, waar de wildcard eerder alleen als
+zijopmerking bij de `saas`-recordkeuze stond.
+
+**Opgelost dezelfde dag.** De zone-beheerder heeft de wildcard verwijderd; de
+host achter `81.24.6.45` was een gedeprecieerd legacy-cluster. Nagemeten om 12:45
+CEST autoritatief tegen `bailey.ns.cloudflare.com`, dus zonder resolver-cache:
+
+- verzonnen naam, typefout en `dinkelland.openwoo.app` → **NXDOMAIN**
+- `openwoo.app`, `www`, `conduction`, `canary` → eigen geproxiede records, ongewijzigd
+- alle **67** hosts met een Ingress onder `openwoo.app` → 67 × NOERROR, 0 kapot
+- 34 CT-namen (certspotter): 29 resolven, 5 NXDOMAIN — alle vijf onder
+  `accept.openwoo.app` en zonder Ingress in het cluster (234 Ingress-hosts
+  gecontroleerd), dus historische certificaten van verdwenen tenants en géén
+  gevolg van deze wijziging. Een wildcard op één label dekte namen met twee
+  labels ook nooit.
+
+**Correctie in dezelfde sessie.** De Configuration-Rule-uitzonderingen voor
+`openwoo.app`, `www.openwoo.app` en `conduction.openwoo.app` blijven staan, maar
+niet om de reden die hier stond. `cloudflare-ipv6.md` schreef die uitzondering
+sinds 2026-08-18 toe aan `81.24.6.45` en het fake ingress-certificaat; dat is
+onjuist. Gemeten 2026-08-19 13:00 CEST: apex en `www` zijn CNAME's naar
+`conductionnl.github.io`, `conduction.openwoo.app` heeft de vier
+GitHub-Pages-A-records `185.199.108-111.153`, en die origin presenteert
+`CN=*.github.io` — geldige Let's Encrypt-keten, verkeerde naam, dus Full (strict)
+geeft er een 526. Gecorrigeerd in `docs/cloudflare-ipv6.md` en
+`docs/wildcard-openwoo-app.md`.
+
+Wat daarmee nieuw openstaat: die drie namen zouden Full (strict) wél kunnen
+halen als GitHub Pages een certificaat op het eigen domein uitgeeft. Niet
+gemeten, niet aangevraagd.
+
+De DNS-wijziging is door een mens gedaan, buiten deze repo (Cloudflare-zone).
+Hier alleen documentatie.
+
 ## 2026-08-18 (later 6) — wildcard voor commonground.nu: certificaat eerst
 
 Dit is de rem op de Gateway-migratie van de Nextcloud-kant. Elke host onder
