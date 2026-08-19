@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-08-18
+last_reviewed: 2026-08-19
 owner: info@conduction.nl
 ---
 
@@ -16,6 +16,18 @@ zone vast en staat hieronder al ingevuld.
 **Vooraf, bij ons:** de hostnaam als custom hostname toevoegen in Cloudflare
 (SSL/TLS → Custom Hostnames, Cloudflare-managed, minimum TLS 1.2, validatie TXT).
 Doe dat vóór je de mail stuurt, anders kan de validatie niet slagen.
+
+**Haal daarna de eigendomsverificatie op**, want die waarde is per hostnaam
+uniek en moet in stap 1 mee:
+
+    CF_API_TOKEN=... ./scripts/cf-verify.sh --ownership <hostnaam>
+
+Zonder dat record blijft de hostname op `pending` staan met de melding
+`custom hostname does not CNAME to this zone`, en dan routeert de edge niet —
+status 409. Het certificaat wordt wél uitgegeven, dus `ssl: active` met
+`status: pending` is de normale tussenstand als je dit vergeet. Aantoonbaar
+misgegaan bij Noaberkracht op 2026-08-19: stap 1 vroeg alleen de DCV-CNAME,
+waarna de edge niet te meten was en stap 2 dus niet verstuurd kon worden.
 
 **Stap 2 pas versturen** nadat de edge gemeten is:
 
@@ -38,13 +50,19 @@ Om de bevinding over IPv6 op te lossen laten we [hostnaam] via ons CDN lopen. De
 site is daarmee over IPv6 bereikbaar en de zone blijft bij jullie in beheer. We
 doen het in twee stappen, zodat er in stap 1 nog niets verschuift.
 
-## Stap 1 — nu: één CNAME voor certificaatvalidatie
+## Stap 1 — nu: twee records, nog geen verkeer
 
-    _acme-challenge.[hostnaam].  CNAME  [hostnaam].7f19f08d5865daf8.dcv.cloudflare.com.
+    _acme-challenge.[hostnaam].       CNAME  [hostnaam].7f19f08d5865daf8.dcv.cloudflare.com.
+    _cf-custom-hostname.[hostnaam].   TXT    [eigendomswaarde]
 
-Hiermee kan het certificaat voor jullie hostnaam worden uitgegeven en daarna
-automatisch worden vernieuwd, zonder dat jullie er elke keer iets voor hoeven te
-doen. Dit record moet dus blijven staan.
+Het eerste record laat het certificaat voor jullie hostnaam uitgeven en daarna
+automatisch vernieuwen, zonder dat jullie er elke keer iets voor hoeven te doen.
+Dit record moet dus blijven staan.
+
+Het tweede record bevestigt dat jullie eigenaar zijn van de hostnaam. Daarmee
+kunnen wij de route volledig testen terwijl het verkeer nog gewoon loopt zoals
+nu. Zonder dit record kunnen we pas meten ná de omzetting, en dat is precies wat
+we willen voorkomen. Het mag weg zodra stap 2 is doorgevoerd.
 
 Er verandert in deze stap niets voor bezoekers: het verkeer loopt nog precies
 zoals nu.
@@ -69,8 +87,9 @@ A-record levert onvoorspelbaar gedrag op.
 
 Kort samengevat wat er onder [hostnaam] hoort te staan:
 
-    [hostnaam].                  CNAME  saas.openwoo.app.        (in plaats van het A-record)
-    _acme-challenge.[hostnaam].  CNAME  [hostnaam].7f19f08d5865daf8.dcv.cloudflare.com.
+    [hostnaam].                      CNAME  saas.openwoo.app.    (in plaats van het A-record)
+    _acme-challenge.[hostnaam].      CNAME  [hostnaam].7f19f08d5865daf8.dcv.cloudflare.com.
+    _cf-custom-hostname.[hostnaam].  TXT    [eigendomswaarde]     (mag weg na stap 2)
 
 ## Verwerkingsafspraak
 

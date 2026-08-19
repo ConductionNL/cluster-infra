@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-08-18
+last_reviewed: 2026-08-19
 owner: info@conduction.nl
 ---
 
@@ -160,9 +160,19 @@ en een klanthostnaam valt daarbuiten.
 Verifiëren per host: `./scripts/check-cloudflare-proxy.sh <host>` — verwacht een
 AAAA, `server: cloudflare` en een werkende IPv6-verbinding.
 
+De hele klantdomein-set in één tabel, zonder token:
+
+    ./scripts/saas-fleet-status.sh
+
+Dat leest de klanthosts uit de Ingressen van het cluster en zet per host neer of
+de DCV-CNAME staat, of de eigendoms-TXT staat, wat de edge antwoordt en of IPv6
+werkt. Reken op enkele minuten voor de volledige set; `TIMEOUT` korter zetten
+maakt het sneller maar minder betrouwbaar op trage hosts.
+
 ## Via de API controleren en zetten
 
     CF_API_TOKEN=... ./scripts/cf-verify.sh              # leest zone-modus, fallback origin, custom hostnames, rule
+    CF_API_TOKEN=... ./scripts/cf-verify.sh --ownership   # wat er nog nodig is om `pending` op te heffen
     CF_API_TOKEN=... ./scripts/cf-configrule-apply.sh    # dry-run van de Configuration Rule
     CF_API_TOKEN=... ./scripts/cf-configrule-apply.sh --apply
 
@@ -243,7 +253,7 @@ zelf in plaats van dit getal te vertrouwen:
 |---|---|
 | `*.openwoo.app` (live) | proxy-vlag; edge-cert is het universal pack |
 | `*.accept.openwoo.app` | proxy-vlag; edge-cert is het advanced pack (`CN=accept.openwoo.app`) |
-| klantdomeinen (`open.*.nl`) | Cloudflare for SaaS; wacht op twee CNAME's van de klant |
+| klantdomeinen (`open.*.nl`) | Cloudflare for SaaS; wacht op twee records van de klant in stap 1 (DCV-CNAME + eigendoms-TXT) en de site-CNAME in stap 2 |
 | `*.commonground.nu` (Nextcloud) | **kan niet** via deze route — 100 MB bodylimiet tegen `proxy-body-size: 16G` |
 
 De klantdomeinen die nu al AAAA hebben, staan niet op onze loadbalancer
@@ -257,6 +267,31 @@ Verdwijnt het advanced pack, dan moet de default weer per omgeving — anders ge
 een accept-host een TLS-handshakefout. Dat staat als voorwaarde in de template.
 
 Support-antwoorden per situatie: `mail-ipv6-support.md`.
+
+## Hostname-activatie: het certificaat is niet genoeg
+
+Een custom hostname heeft twee onafhankelijke statussen. `ssl.status` gaat op
+`active` zodra het certificaat is uitgegeven — dat regelt de DCV-CNAME uit stap 1.
+De hostname zelf (`status`) blijft daarnaast op `pending` tot Cloudflare eigendom
+heeft bevestigd, en zolang dat zo is routeert de edge niet: **HTTP 409**, met
+`custom hostname does not CNAME to this zone` in `verification_errors`.
+
+Standaard bevestigt Cloudflare eigendom door de site-CNAME zelf te zien — maar
+dat is stap 2, en die willen we juist pas zetten nadat we de route hebben
+gemeten. Die kip-ei zit in de eerste versie van `mail-ipv6-klant.md` en kwam op
+2026-08-19 bij Noaberkracht naar boven: certificaat `active`, hostname `pending`,
+edge 409, stap 2 niet te verantwoorden.
+
+Uitweg is pre-validatie. Twee wegen, per hostnaam op te vragen met
+`cf-verify.sh --ownership`:
+
+    _cf-custom-hostname.<hostnaam>.  TXT  <uuid>          bij de klant, één record
+    http://<hostnaam>/.well-known/cf-custom-hostname-challenge/<uuid>   bij ons
+
+De TXT is de goedkoopste: één extra record in stap 1, en de hostname wordt actief
+zonder dat er verkeer verschuift. De HTTP-variant kan zonder de klant zolang die
+hostnaam nog naar onze loadbalancer wijst, maar vraagt een route op de
+tenant-frontend en is daarmee duurder dan het probleem.
 
 ## Wat de uitrol niet meeneemt
 

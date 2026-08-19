@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-08-19 (later) — waarom de klanthosts 409 gaven: hostname pending, niet het certificaat
+
+Noaberkracht had stap 1 gezet en het certificaat was uitgegeven, maar
+`open.dinkelland.nl` en `open.tubbergen.nl` gaven 409 aan de edge. Gemeten via de
+API: `ssl.status: active` naast `status: pending`, met
+`verification_errors: ['custom hostname does not CNAME to this zone.']`.
+
+Een custom hostname heeft dus twee statussen. De DCV-CNAME uit stap 1 levert het
+certificaat; eigendomsverificatie is een tweede spoor, en zonder dat routeert de
+edge niet. Cloudflare bevestigt eigendom standaard door de site-CNAME te zien —
+precies het record dat wij pas in stap 2 durven vragen. Die kip-ei zat in ons
+eigen mailtemplate: "stap 2 pas versturen nadat de edge gemeten is" was met
+alleen de DCV-CNAME onuitvoerbaar.
+
+Drie wijzigingen:
+
+- `docs/mail-ipv6-klant.md` — stap 1 vraagt nu **twee** records: de DCV-CNAME én
+  `_cf-custom-hostname.<hostnaam>` TXT met de eigendomswaarde. Met de reden
+  erbij, zodat niemand het als overbodig wegstreept, en met de notitie dat het
+  TXT-record na stap 2 weg mag.
+- `scripts/cf-verify.sh` — nieuwe modus `--ownership [hostnaam]`: drukt per
+  custom hostname de eigendoms-TXT, de HTTP-challenge-URL en de openstaande
+  meldingen af. Zonder argument alle hostnames. Read-only, zelfde vijf
+  Read-rechten.
+- `scripts/saas-fleet-status.sh` — nieuw. Eén tabel met de stand van alle
+  klantdomein-hosts uit de Ingressen van het cluster: DCV, eigendom, edge-status,
+  certificaat-uitgever, AAAA en een oordeel per host (`klaar`, `stap2-open`,
+  `stap1-half`, `niet-begonnen`, `elders`, `kapot-<code>`). Geen token nodig;
+  `TARGET`, `LB_IP`, `EDGE_IP`, `TIMEOUT` en `OWN_ZONES` zijn env-tunable.
+
+Eerste vlootmeting met dat script (20:26 CEST, klantdomeinen): `open.dinkelland.nl`
+en `open.tubbergen.nl` op `stap1-half`, `open.ede.nl` en `open.lansingerland.nl`
+op `elders` (staan op een ander platform, hebben daar al IPv6), de overige
+klanthosts op `niet-begonnen`. De volledige set duurt enkele minuten; een run met
+`timeout 400` haalde 24 van de hosts.
+
+Openstaand en niet aangeraakt: `saas.openwoo.app` geeft zelf een 526, want onze
+nginx heeft geen server-block voor die naam en valt terug op het fake
+certificaat. Voor de SaaS-route is dat niet fataal (Cloudflare stuurt de
+klanthostnaam als SNI), maar het is een valkuil voor wie de fallback origin
+handmatig test.
+
 ## 2026-08-19 — wildcard `*.openwoo.app` weg: typefouten geven nu NXDOMAIN
 
 Los van het IPv6-dossier, want het effect is burgerzichtbaar en de IPv6-route

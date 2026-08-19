@@ -5,6 +5,11 @@
 # scripts/cf-verify.sh — controleer via de Cloudflare-API of de SaaS-opzet staat
 # zoals bedoeld.
 #
+# Met --ownership drukt het script per custom hostname de records af waarmee de
+# klant eigendom bewijst. Dat is een ander record dan de certificaatvalidatie:
+# zonder eigendomsbewijs blijft de hostname op `pending` en routeert de edge niet
+# (status 409), ook al staat het certificaat op `active`.
+#
 # Leest vier dingen en velt per stuk een oordeel: de SSL-modus van de zone, het
 # fallback-origin-record (bestaat en geproxied), de custom hostnames met hun
 # status, en de Configuration Rule die SSL op Full (strict) zet. Read-only; er
@@ -29,6 +34,8 @@
 #   CF_API_TOKEN=... ./scripts/cf-verify.sh
 #   CF_API_TOKEN=... CF_ZONE=openwoo.app ./scripts/cf-verify.sh
 #   CF_API_TOKEN=... FALLBACK=saas.openwoo.app ./scripts/cf-verify.sh
+#   CF_API_TOKEN=... ./scripts/cf-verify.sh --ownership              # alle pending hostnames
+#   CF_API_TOKEN=... ./scripts/cf-verify.sh --ownership open.dinkelland.nl
 
 set -euo pipefail
 
@@ -67,8 +74,45 @@ print(json.dumps(d['result']))
 " "$body"
 }
 
+# Drukt per custom hostname af wat er nog nodig is om `pending` op te heffen.
+show_ownership() {
+  local zone_id="$1" want="$2" hosts
+  hosts="$(cf_result "zones/${zone_id}/custom_hostnames?per_page=50")" ||
+    die "custom hostnames niet op te halen (recht: SSL and Certificates: Read)"
+  python3 -c "
+import json,sys
+want=sys.argv[1]
+rows=[x for x in json.load(sys.stdin) if not want or x['hostname']==want]
+if not rows:
+    print('geen custom hostname gevonden' + (f' voor {want}' if want else ''), file=sys.stderr)
+    raise SystemExit(1)
+for x in rows:
+    ssl=x.get('ssl') or {}
+    print(f\"host           {x['hostname']}\")
+    print(f\"  status       {x.get('status','?')} (cert: {ssl.get('status','?')})\")
+    ov=x.get('ownership_verification') or {}
+    if ov:
+        print(f\"  TXT-naam     {ov.get('name')}\")
+        print(f\"  TXT-waarde   {ov.get('value')}\")
+    ovh=x.get('ownership_verification_http') or {}
+    if ovh:
+        print(f\"  of HTTP      {ovh.get('http_url')}\")
+    for e in x.get('verification_errors') or []:
+        print(f\"  melding      {e}\")
+    if x.get('status')=='active':
+        print('  eigendom is al bevestigd; hier is niets meer te doen')
+" "$want" <<<"$hosts"
+}
+
 main() {
-  [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { usage; exit 2; }
+  local mode="" want=""
+  while (( $# )); do
+    case "$1" in
+      --ownership) mode="ownership"; shift; [[ "${1:-}" == --* ]] || { want="${1:-}"; [[ -n "$want" ]] && shift; } ;;
+      -h|--help) usage; exit 2 ;;
+      *) die "onbekend argument: $1 (zie --help)" ;;
+    esac
+  done
   [[ -n "${CF_API_TOKEN:-}" ]] || die "zet CF_API_TOKEN in de omgeving"
 
   local zone_id
@@ -78,6 +122,12 @@ z=json.load(sys.stdin)
 print(z[0]['id'] if z else '')
 ")" || die "zone ${CF_ZONE} niet op te halen (recht: Zone → Zone: Read)"
   [[ -n "$zone_id" ]] || die "zone ${CF_ZONE} niet gevonden op dit token"
+
+  if [[ "$mode" == "ownership" ]]; then
+    show_ownership "$zone_id" "$want"
+    return
+  fi
+
   verdict "zone" "${CF_ZONE}"
 
   local ssl
