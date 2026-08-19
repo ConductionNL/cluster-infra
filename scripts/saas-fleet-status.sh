@@ -34,6 +34,17 @@
 #   ./scripts/saas-fleet-status.sh --file /tmp/hosts.txt       # lijst uit een bestand
 #   EDGE_IP=104.21.60.114 ./scripts/saas-fleet-status.sh       # meet tegen de edge i.p.v. via DNS
 #   TIMEOUT=5 ./scripts/saas-fleet-status.sh                   # korter geduld per host
+#   NS=1.1.1.1 ./scripts/saas-fleet-status.sh                   # andere resolver, eigen cache
+#
+# Zonder NS leest het script via de systeemresolver, en die kan direct na een
+# DNS-wijziging nog het oude antwoord geven — gezien op 2026-08-19: één minuut na
+# een omzetting stond het A-record nog in de cache en luidde het oordeel
+# `niet-begonnen` terwijl de host al klaar was. Meet je vlak na een wijziging,
+# zet dan NS op een andere resolver.
+#
+# NS moet een **recursieve** resolver zijn, niet de autoritatieve server van de
+# zone. Een autoritatieve server volgt geen CNAME naar een andere zone en geeft
+# dus alleen de CNAME terug, geen adres — dan lijkt elke omgezette host adresloos.
 
 set -euo pipefail
 
@@ -42,12 +53,28 @@ readonly LB_IP="${LB_IP:-81.24.6.82}"
 readonly EDGE_IP="${EDGE_IP:-}"
 readonly TIMEOUT="${TIMEOUT:-8}"
 readonly OWN_ZONES="${OWN_ZONES:-openwoo.app commonground.nu opencatalogi.nl}"
+readonly NS="${NS:-}"
 
 usage() {
   sed -n '/^# Usage:/,/^$/p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 die() { echo "fout: $*" >&2; exit 1; }
+
+# Eén plek voor alle DNS-vragen, zodat NS overal geldt.
+dig_rr() {
+  local host="$1" type="$2"
+  if [[ -n "$NS" ]]; then
+    dig "@${NS}" +short "$host" "$type" 2>/dev/null
+  else
+    dig +short "$host" "$type" 2>/dev/null
+  fi
+}
+
+# Alleen adressen: een CNAME-keten zet de doelnaam als eerste regel in +short,
+# en die mag niet als "adres" doorgaan.
+only_v4() { grep -E '^[0-9]+(\.[0-9]+){3}$' || true; }
+only_v6() { grep -E '^[0-9a-fA-F:]+$' || true; }
 
 is_own_zone() {
   local host="$1" zone
@@ -90,7 +117,7 @@ cert_issuer() {
 
 ipv6_ok() {
   local host="$1"
-  [[ -n "$(dig +short "$host" AAAA)" ]] || { echo "-"; return; }
+  [[ -n "$(dig_rr "$host" AAAA | only_v6)" ]] || { echo "-"; return; }
   if curl -6 -sS -o /dev/null --max-time "$TIMEOUT" "https://${host}/" 2>/dev/null; then
     echo "ja"
   else
@@ -121,11 +148,11 @@ verdict_for() {
 
 report_host() {
   local host="$1" cname a aaaa dcv own status issuer v6 verdict
-  cname="$(dig +short "$host" CNAME | tr '\n' ' ')"
-  a="$(dig +short "$host" A | tr '\n' ' ')"
-  aaaa="$(dig +short "$host" AAAA | head -1)"
-  dcv="$(dig +short "_acme-challenge.${host}" CNAME | head -1)"
-  own="$(dig +short "_cf-custom-hostname.${host}" TXT | head -1)"
+  cname="$(dig_rr "$host" CNAME | tr '\n' ' ')"
+  a="$(dig_rr "$host" A | only_v4 | tr '\n' ' ')"
+  aaaa="$(dig_rr "$host" AAAA | only_v6 | head -1)"
+  dcv="$(dig_rr "_acme-challenge.${host}" CNAME | head -1)"
+  own="$(dig_rr "_cf-custom-hostname.${host}" TXT | head -1)"
   status="$(http_status "$host")"
   issuer="$(cert_issuer "$host")"
   v6="$(ipv6_ok "$host")"

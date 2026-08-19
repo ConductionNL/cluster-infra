@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-08-19 (laatste) — SaaS-route beproefd op een eigen hostnaam, drie aannames omgezet in metingen
+
+Voor Dinkelland en Tubbergen stond de omzetting op "aangenomen dat het werkt".
+Dat is niet iets om op een gemeentesite uit te proberen, dus de hele route is
+eerst doorlopen op `saastest.conduction.nl`: eigen zone, external-dns beheert hem
+niet, en gelopen op de acceptatie-canary. Volledig opgeruimd na de test.
+
+Tijdlijn (CEST): 21:15:28 eigendoms-TXT en DCV-TXT gezet, 21:17:38
+origin-certificaat READY via HTTP-01, **21:17:51 hostname `active`** terwijl het
+A-record nog op onze loadbalancer stond, 21:18:50 edge-certificaat `active`,
+21:19:41 A-record vervangen door `CNAME saas.openwoo.app`, 21:19:49 een 200 over
+de echte weg met werkende IPv6.
+
+Wat daarmee bewezen is:
+
+- **De eigendoms-TXT activeert de hostname zonder verkeer te verplaatsen** —
+  2 min 23 s. Daarmee is de pre-flight die het mailtemplate belooft uitvoerbaar.
+- **De Configuration Rule met `ssl=strict` geldt ook voor custom-hostname-verkeer.**
+  Dat stond in `docs/cloudflare-ipv6.md` als "nog te bewijzen". De zone staat op
+  `flexible` en onze origin geeft op HTTP een 308; had de regel niet gegolden,
+  dan was het een redirect-lus of een 526 geworden. Het werd een 200.
+- **Het edge-certificaat kwam van `O=SSL Corporation` (ssl.com)**, niet van Let's
+  Encrypt of Google. Levend bewijs voor het CAA-advies in `caa.md`: alle drie de
+  CA's toestaan of geen CAA zetten. Eén CA noemen had de uitgifte geblokkeerd.
+- **De edge filtert onze headers niet.** De repetitie-Ingress had bewust geen
+  header-snippet: origin stuurde 2 van 5, edge leverde diezelfde 2.
+
+Ook twee fouten in `scripts/saas-fleet-status.sh` gevonden en gerepareerd, beide
+door de repetitie zichtbaar geworden:
+
+1. Het las adressen via de systeemresolver. Eén minuut na de omzetting stond het
+   oude A-record nog in de cache en luidde het oordeel `niet-begonnen` terwijl de
+   host al klaar was. `NS` is nu env-tunable.
+2. Mijn eerste poging zette `NS` op de autoritatieve server van de zone. Die
+   volgt geen CNAME naar een andere zone en geeft dus alleen de CNAME terug — dan
+   lijkt elke omgezette host adresloos. `NS` moet een recursieve resolver zijn;
+   dat staat nu in de header. Daarnaast filtert het script CNAME-regels uit de
+   adreswaarden, zodat een keten niet als "adres" doorgaat.
+
+De klantstand is onveranderd: beide hostnames nog `pending`, want die activeren
+door de site-CNAME uit stap 2 of door een eigendoms-TXT in hun zone.
+
 ## 2026-08-19 (later) — waarom de klanthosts 409 gaven: hostname pending, niet het certificaat
 
 Noaberkracht had stap 1 gezet en het certificaat was uitgegeven, maar

@@ -107,14 +107,53 @@ hostnaam bestaat. Dat is bij Cloudflare for SaaS normaal — de naam staat in de
 zone van de klant. Negeren en deployen; géén record voor de klanthostnaam in onze
 zone aanmaken.
 
-**Nog te bewijzen:** dat de SSL-actie van een Configuration Rule ook op
-custom-hostname-verkeer werkt. Gedocumenteerd per custom hostname zijn minimum
-TLS-versie en cipher suites, de modus niet. Daarom test de edge vóór de cutover:
+**Bewezen op 2026-08-19** met een repetitie op onze eigen hostnaam
+`saastest.conduction.nl` — zie de sectie hieronder. De SSL-actie van een
+Configuration Rule geldt óók voor custom-hostname-verkeer: 200 door de edge,
+terwijl de zone op `flexible` staat en onze origin op HTTP een 308 geeft. Had de
+regel niet gegolden, dan was het een redirect-lus geworden.
 
-    EDGE_IP=<cloudflare-ip> ./scripts/check-saas-hostname.sh open.dinkelland.nl
+De pre-flight blijft staan als procedure:
 
-Krijgen we een redirect-lus of 526, dan valt deze route af zonder dat de klant
-iets merkt.
+    EDGE_IP=<cloudflare-ip> ./scripts/check-saas-hostname.sh <hostnaam>
+
+## Repetitie op een eigen hostnaam (2026-08-19)
+
+De hele route één keer doorlopen op `saastest.conduction.nl`, om te bewijzen wat
+we anders op een gemeentesite zouden uitproberen. Werkt omdat `conduction.nl` bij
+Cloudflare staat en external-dns die zone níét beheert; een custom hostname mag
+niet in de SaaS-zone zelf staan, dus een naam onder `openwoo.app` kan hier niet.
+Gelopen op de acceptatie-canary, niet op een productie-namespace.
+
+| Klok (CEST) | Gebeurtenis |
+|---|---|
+| 21:15:28 | eigendoms-TXT en DCV-TXT gezet in `conduction.nl` |
+| 21:17:38 | origin-certificaat READY via HTTP-01, negen seconden na de challenge |
+| 21:17:51 | **hostname `active`** — binnen 2 min 23 s, verkeer stond nog op onze LB |
+| 21:18:50 | edge-certificaat `active` |
+| 21:19:41 | A-record vervangen door `CNAME saas.openwoo.app`, DNS only |
+| 21:19:49 | 200 over de echte weg, IPv6 OK, AAAA via de keten |
+
+Vier dingen die deze repetitie heeft opgeleverd:
+
+**De eigendoms-TXT activeert de hostname zonder verkeer te verplaatsen.** Dat is
+de uitweg uit de kip-ei hierboven: pre-flight meten mét `EDGE_IP` kan pas als de
+hostname actief is, en dat kan nu vóór de cutover. Reken op enkele minuten.
+
+**De Configuration Rule geldt voor custom-hostname-verkeer.** Zie hierboven.
+
+**Het edge-certificaat kwam van een derde CA:** `O=SSL Corporation, CN=Cloudflare
+TLS Issuing ECC CA 4`. Dat is `ssl.com` — niet Let's Encrypt, niet Google. Levend
+bewijs dat een CAA-record op een klanthostnaam alle drie moet toestaan, zoals
+`caa.md` voorschrijft. Eén CA noemen had hier de uitgifte geblokkeerd.
+
+**Onze headers gaan ongeschonden door de edge.** De repetitie-Ingress kreeg
+bewust niet de header-snippet van de echte tenants: de origin stuurde 2 van 5, de
+edge leverde precies diezelfde 2. Geen filtering aan de edge.
+
+Opruimen hoort dezelfde dag: custom hostname weg, de vier records weg, Ingress en
+certificaat weg. Een custom hostname kost een slot (1 van 100) en een
+hand-aangelegde Ingress in een Argo-namespace is drift die niemand later plaatst.
 
 ## Onze eigen hosts onder `*.openwoo.app`
 
