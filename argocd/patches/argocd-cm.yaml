@@ -1,8 +1,9 @@
 # Zie docs/argocd.md (zelfbeheer, bootstrap, break-glass).
 # Delta op de upstream argocd-cm: url, SSO (OIDC via Keycloak;
 # clientSecret is een $-verwijzing naar bootstrap-secret argocd-oidc-keycloak),
-# admin uitgeschakeld, service-accounts, en een verouderde
-# configManagementPlugins-key (bewust as-is vastgelegd; opschonen = aparte PR).
+# admin uitgeschakeld, service-accounts, een health-check voor ExternalSecret,
+# en een verouderde configManagementPlugins-key (bewust as-is vastgelegd;
+# opschonen = aparte PR).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -19,6 +20,42 @@ data:
     clientSecret: $argocd-oidc-keycloak:clientSecret
 
     requestedScopes: ["openid", "profile", "email", "groups"]'
+  # Argo kent van zichzelf geen health voor external-secrets.io/ExternalSecret
+  # en beschouwt een onbekend kind als Healthy zodra de resource bestaat. Dat
+  # maakt een sync-wave op een ExternalSecret waardeloos als barrier: de wave
+  # gaat door voordat ESO de Secret heeft weggeschreven, en de pod die de
+  # Secret mount faalt op "MountVolume.SetUp failed ... not found" (voorval
+  # 2026-08-21 op een verse Nextcloud-tenant).
+  #
+  # Statusvorm gemeten op een live ExternalSecret: status.conditions[] met
+  # type "Ready", status "True"/"False", reason "SecretSynced", message.
+  # Geen conditions = ESO heeft de resource nog niet gezien -> Progressing.
+  #
+  # Blast radius: elke Application met een ExternalSecret. Op 2026-08-21 waren
+  # alle 30 ExternalSecrets in de vloot Ready=True, dus dit kleurt niets om.
+  # Wat het wél verandert: een ExternalSecret die blijft hangen maakt zijn
+  # Application nu Progressing/Degraded in plaats van stil groen.
+  resource.customizations.health.external-secrets.io_ExternalSecret: |
+    local hs = {}
+    if obj.status ~= nil and obj.status.conditions ~= nil then
+      for _, condition in ipairs(obj.status.conditions) do
+        if condition.type == "Ready" then
+          if condition.status == "True" then
+            hs.status = "Healthy"
+            hs.message = condition.message
+            return hs
+          end
+          if condition.status == "False" then
+            hs.status = "Degraded"
+            hs.message = condition.message
+            return hs
+          end
+        end
+      end
+    end
+    hs.status = "Progressing"
+    hs.message = "Wacht tot ESO de Secret heeft weggeschreven"
+    return hs
   accounts.cluster-provisioner: apiKey
   accounts.cluster-provisioner.enabled: 'true'
   accounts.syncbot: apiKey

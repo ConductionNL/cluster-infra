@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-08-21 — ExternalSecret krijgt een health-check, sync-waves worden een barrier
+
+Argo kende geen health voor `external-secrets.io/ExternalSecret` en beschouwde
+dat onbekende kind als Healthy zodra de resource bestond. Gevolg: een sync-wave
+op een ExternalSecret is geen barrier — de wave gaat door voordat ESO de `Secret`
+heeft weggeschreven, en de pod die die Secret mount faalt op
+`MountVolume.SetUp failed ... not found`. Dat gebeurde vandaag op een verse
+Nextcloud-tenant.
+
+`argocd/patches/argocd-cm.yaml` krijgt daarom
+`resource.customizations.health.external-secrets.io_ExternalSecret`: een
+Lua-check die de `Ready`-conditie leest. `Ready=True` → Healthy, `Ready=False` →
+Degraded met de ESO-message, geen status of geen conditions → Progressing.
+
+Niet aangenomen maar gemeten:
+
+- De statusvorm is uitgelezen op een live ExternalSecret:
+  `status.conditions[]` met `type: Ready`, `status: "True"`, `reason:
+  SecretSynced`, `message: secret synced`.
+- De Lua is getest met luajit tegen vijf gevallen (Ready True/False, lege
+  status, geen status, en een vreemd conditiontype vóór `Ready`) — alle vijf
+  goed.
+- `kubectl diff -k argocd` toont precies één toegevoegde key en geen andere
+  drift.
+- Blast radius nagelopen vóór invoering: alle 30 ExternalSecrets in de vloot
+  stonden `Ready=True`, dus er kleurt geen Application om. Wat wél verandert:
+  een ExternalSecret die blijft hangen maakt zijn Application nu
+  Progressing/Degraded in plaats van stil groen — dat is het doel.
+
+De tegenhanger zit in Nextcloud-base: `charts/tenant-secret` zet
+`argocd.argoproj.io/sync-wave: "-1"` op de ExternalSecret. Wave en health-check
+horen bij elkaar; één zonder de ander lost de race niet op.
+
+De Application `argocd` heeft geen automated sync, dus dit landt pas na een
+handmatige sync. `docs/argocd.md` heeft een nieuwe sectie § Health-checks.
+
 ## 2026-08-19 (laatste) — SaaS-route beproefd op een eigen hostnaam, drie aannames omgezet in metingen
 
 Voor Dinkelland en Tubbergen stond de omzetting op "aangenomen dat het werkt".

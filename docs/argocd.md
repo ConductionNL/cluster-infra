@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-08-11
+last_reviewed: 2026-08-21
 owner: info@conduction.nl
 ---
 
@@ -16,7 +16,8 @@ het cluster-toegangsmechanisme onbeheerde clusterstate.
   gepind en **vendored** (hermetisch: renderen vergt geen egress, en een
   upgrade is één vervangen bestand met reviewbare diff).
 - `argocd/patches/` — het volledige eigen delta op upstream:
-  `argocd-cm` (url, OIDC/Keycloak, admin uit, service-accounts),
+  `argocd-cm` (url, OIDC/Keycloak, admin uit, service-accounts, de
+  ExternalSecret-health-check — zie § Health-checks),
   `argocd-rbac-cm` (autorisatie — wijzigingen hier zijn access-control,
   review verplicht), ssh-known-hosts.
 - `argocd/resources/` — namespace, de ingress
@@ -165,6 +166,40 @@ spoor bij een storing. Controleer dat met:
 Staat daar een dag na de wijziging nog steeds alleen `argocd-automation`
 in — ook 's ochtends ná 05:00 CEST, wanneer de oude timer liep — dan is
 het tweede pad echt weg en mag deze sectie naar de CHANGELOG.
+
+## Health-checks
+
+### ExternalSecret (external-secrets.io)
+
+Argo kent van zichzelf geen health voor `ExternalSecret` en beschouwt een
+onbekend kind als **Healthy zodra de resource bestaat**. Dat is geen detail:
+het maakt een sync-wave op een ExternalSecret waardeloos als barrier. De wave
+gaat door voordat ESO de `Secret` heeft weggeschreven, en de pod die die Secret
+mount faalt op `MountVolume.SetUp failed ... not found`. Dat is op
+**2026-08-21** gebeurd op een verse Nextcloud-tenant (`gooisemeren-prod`).
+
+`argocd/patches/argocd-cm.yaml` bevat daarom een Lua-health-check die de
+`Ready`-conditie leest:
+
+| Live stand | Argo-health |
+|---|---|
+| `Ready=True` (reason `SecretSynced`) | Healthy |
+| `Ready=False` | Degraded, met de ESO-message |
+| geen `status` of geen conditions | Progressing |
+
+De statusvorm is gemeten op een live object, niet aangenomen:
+
+    kubectl get externalsecret nextcloud-secrets -n <tenant> -o jsonpath='{.status}'
+
+**Blast radius: elke Application met een ExternalSecret.** Bij invoering waren
+alle 30 ExternalSecrets in de vloot `Ready=True`, dus er kleurde niets om. Wat
+wél verandert: een ExternalSecret die blijft hangen maakt zijn Application nu
+Progressing/Degraded in plaats van stil groen. Dat is het punt van de check.
+
+Tegenhanger in **Nextcloud-base**: `charts/tenant-secret` zet
+`argocd.argoproj.io/sync-wave: "-1"` op de ExternalSecret. Die wave en deze
+health-check horen bij elkaar — de wave regelt de volgorde, de health-check
+maakt er een barrier van. Eén zonder de ander lost het niet op.
 
 ## Adoptie (fase 3 — elke stap door een mens)
 
