@@ -1,13 +1,37 @@
 ---
-last_reviewed: 2026-08-19
+last_reviewed: 2026-08-22
 owner: info@conduction.nl
 ---
 
 # IPv6 via Cloudflare
 
-Onze loadbalancer is IPv4-only. Cloudflare's edge is dual-stack en genereert voor
-geproxiede records automatisch AAAA. Twee routes, afhankelijk van wie de zone
-bezit.
+## Waarom dit bestaat, en wanneer het weer weg mag
+
+**Cloudflare zit in het verkeerspad om precies één reden: onze loadbalancer
+spreekt geen IPv6.** Niets anders. Geen CDN-wens, geen WAF, geen cachingbeleid.
+De edge van Cloudflare is dual-stack en genereert voor een geproxied record
+automatisch een AAAA; dat is de hele truc.
+
+Dat is een omweg, en een omweg met een prijs: Cloudflare beëindigt de
+versleuteling, ziet de inhoud van verzoeken en de IP-adressen van bezoekers,
+houdt de sleutel van het edge-certificaat, en is daarmee een sub-verwerker in de
+keten naar de klant. Voor een IPv6-vinkje is dat een fors middel.
+
+**De uitweg is native IPv6 op de loadbalancer.** Zodra de hostingleverancier
+(Fuga/Cyso, OpenStack) een dual-stack Service met een IPv6-VIP levert, kan de
+proxy voor de eigen zones eruit en vervalt de sub-verwerker uit die keten. Voor
+`*.commonground.nu` is er sowieso geen andere weg: die hosts kunnen niet achter
+dit CDN, want Cloudflare kapt de request body af op 100 MB terwijl de
+Nextcloud-ingress `proxy-body-size: 16G` heeft.
+
+Behandel alles hieronder dus als een tijdelijke inrichting met een bekende
+einddatum-voorwaarde, niet als de gewenste architectuur. Wie deze pagina leest
+omdat er iets stuk is: de vraag "kan de LB inmiddels IPv6?" hoort bij elke
+herziening opnieuw gesteld te worden.
+
+## De twee routes
+
+Twee routes, afhankelijk van wie de zone bezit.
 
 | Host | Route | Kosten |
 |---|---|---|

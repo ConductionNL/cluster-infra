@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-08-22 (laatste) — vastgelegd waaróm Cloudflare in het pad zit, en wanneer het eruit mag
+
+De reden stond verspreid over de pagina en nergens als staande afspraak, terwijl
+het de belangrijkste zin van het hele dossier is: **Cloudflare zit er om precies
+één reden — onze loadbalancer spreekt geen IPv6.** Geen CDN-wens, geen WAF.
+
+`docs/cloudflare-ipv6.md` opent nu met die reden, met de prijs erbij (Cloudflare
+beëindigt de versleuteling, ziet verzoekinhoud en bezoekers-IP's, houdt de sleutel
+van het edge-certificaat, en is daarmee sub-verwerker) en met de uitweg: zodra
+Fuga/Cyso een dual-stack Service met IPv6-VIP levert, kan de proxy voor de eigen
+zones eruit en vervalt die sub-verwerker uit de keten.
+
+Expliciet gemaakt dat dit een tijdelijke inrichting is met een bekende
+uitstapvoorwaarde, niet de gewenste architectuur, en dat "kan de LB inmiddels
+IPv6?" bij elke herziening opnieuw hoort te worden gesteld. De index verwijst er
+nu ook naar, zodat je het ziet zonder de pagina te openen.
+
 ## 2026-08-22 (later) — klantmail korter, met de twee valkuilen die een ronde kosten
 
 Het template stuurde bij Noaberkracht twee keer een extra ronde heen en weer.
