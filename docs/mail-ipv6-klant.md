@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-08-19
+last_reviewed: 2026-08-22
 owner: info@conduction.nl
 ---
 
@@ -39,6 +39,27 @@ zetten ze er toch een, dan moeten `letsencrypt.org`, `pki.goog` én `ssl.com`
 erin, want de CA wordt door het platform gekozen en kan wisselen) en geen
 DANE-belofte.
 
+**Meerdere hostnamen in één mail** als het dezelfde beheerder is — zet de
+records dan onder elkaar per hostnaam. Twee losse mails leveren twee losse
+ronden op.
+
+## Wat deze mail bewust wél bevat
+
+Drie dingen die eruit zijn gesloopt tijdens de eerste uitrol (Noaberkracht,
+augustus 2026) en er daarna weer in moesten, elk goed voor een extra ronde:
+
+1. **De zelfcontrole met `nslookup`.** Zonder dat commando meldt een klant "het
+   staat erin" terwijl het record niet is gepubliceerd, en gaat er een ronde
+   heen en weer voordat iemand meet. Gebeurd op 2026-08-22 bij beide hostnamen
+   van Noaberkracht: hun eigen nameserver gaf nog het A-record met TTL 300, dus
+   het was geen cache maar een niet-opgeslagen wijziging.
+2. **Verwijderen-dan-aanmaken.** Veel panelen laten het recordtype niet
+   wijzigen. Wie dat niet weet, zet de CNAME náást het A-record — en dat is
+   precies de configuratie die een site voor een deel van de bezoekers stuk
+   maakt.
+3. **Kort.** De eerste versie was drie schermen lang. Wat er niet in staat,
+   wordt wél gelezen.
+
 ---
 
 Aan: [naam]
@@ -46,50 +67,53 @@ Onderwerp: IPv6 voor [hostnaam] — DNS-wijziging in twee stappen
 
 Beste [naam],
 
-Om de bevinding over IPv6 op te lossen laten we [hostnaam] via ons CDN lopen. De
-site is daarmee over IPv6 bereikbaar en de zone blijft bij jullie in beheer. We
-doen het in twee stappen, zodat er in stap 1 nog niets verschuift.
+Om de IPv6-bevinding op te lossen laten we [hostnaam] via ons CDN lopen. De zone
+blijft bij jullie. Twee stappen; in stap 1 verschuift er nog niets.
 
-## Stap 1 — nu: twee records, nog geen verkeer
+## Stap 1 — twee records toevoegen
 
     _acme-challenge.[hostnaam].       CNAME  [hostnaam].7f19f08d5865daf8.dcv.cloudflare.com.
     _cf-custom-hostname.[hostnaam].   TXT    [eigendomswaarde]
 
-Het eerste record laat het certificaat voor jullie hostnaam uitgeven en daarna
-automatisch vernieuwen, zonder dat jullie er elke keer iets voor hoeven te doen.
-Dit record moet dus blijven staan.
+Het eerste zorgt dat het certificaat wordt uitgegeven en zich daarna vanzelf
+vernieuwt; dat record blijft staan. Het tweede laat ons de route testen terwijl
+het verkeer nog gewoon loopt.
 
-Het tweede record bevestigt dat jullie eigenaar zijn van de hostnaam. Daarmee
-kunnen wij de route volledig testen terwijl het verkeer nog gewoon loopt zoals
-nu. Zonder dit record kunnen we pas meten ná de omzetting, en dat is precies wat
-we willen voorkomen. Het mag weg zodra stap 2 is doorgevoerd.
+Controleer zelf of ze staan, dan hoeven we daar niet over heen en weer:
 
-Er verandert in deze stap niets voor bezoekers: het verkeer loopt nog precies
-zoals nu.
+    nslookup -type=TXT _cf-custom-hostname.[hostnaam] 1.1.1.1
 
-## Stap 2 — later: het verkeer omzetten
+Laat weten wanneer ze staan.
 
-Als wij hebben gecontroleerd dat alles klaarstaat, vragen we jullie het A-record
-te vervangen door:
+## Stap 2 — het A-record vervangen
+
+Nadat wij stap 1 hebben gecontroleerd:
 
     [hostnaam].  CNAME  saas.openwoo.app.
 
-Dat is het moment dat het verkeer verschuift. Terugdraaien kan altijd door het
-oorspronkelijke A-record terug te zetten.
+**Vervangen, niet toevoegen.** Het A-record moet weg. Naast een CNAME mag
+volgens de DNS-standaard niets anders op dezelfde naam staan — blijft het
+A-record staan, dan is de site voor een deel van de bezoekers onbereikbaar.
 
-## Belangrijk: alleen die CNAME, geen A- of AAAA-record
+Twee dingen die in de praktijk misgaan:
 
-Het A-record vervalt en er komt **geen** A- of AAAA-record naast de CNAME. Ook
-niet een AAAA met een adres van ons: ons platform is IPv4-only, de
-IPv6-bereikbaarheid komt van het CDN. Voor een naam met een CNAME mag er
-volgens de DNS-standaard ook niets anders naast staan, dus een achtergebleven
-A-record levert onvoorspelbaar gedrag op.
+- In veel beheerpanelen kun je het type van een bestaand record niet wijzigen.
+  Verwijder dan eerst het A-record en maak daarna de CNAME aan.
+- Sommige panelen hebben een aparte knop om wijzigingen te publiceren. Zonder
+  die klik is er niets veranderd, ook al ziet het scherm er goed uit.
 
-Kort samengevat wat er onder [hostnaam] hoort te staan:
+Controleer daarom zelf voordat je het doorgeeft:
 
-    [hostnaam].                      CNAME  saas.openwoo.app.    (in plaats van het A-record)
-    _acme-challenge.[hostnaam].      CNAME  [hostnaam].7f19f08d5865daf8.dcv.cloudflare.com.
-    _cf-custom-hostname.[hostnaam].  TXT    [eigendomswaarde]     (mag weg na stap 2)
+    nslookup -type=CNAME [hostnaam] 1.1.1.1
+
+Staat er `saas.openwoo.app`, dan is het gelukt. Staat er nog een IP-adres, dan
+is de wijziging niet opgeslagen of niet gepubliceerd.
+
+Omdat wij in stap 1 al hebben getest, is er bij deze omzetting geen
+onderbreking te verwachten. Terugdraaien kan altijd: CNAME weg, oorspronkelijk
+A-record terug.
+
+Er komt geen AAAA-record bij — dat verzorgt het CDN.
 
 ## Verwerkingsafspraak
 
@@ -104,7 +128,7 @@ record bij elke certificaatvernieuwing zou moeten meebewegen — en die vernieuw
 is bij ons geautomatiseerd terwijl het DNS bij jullie staat. Wij stellen voor deze
 bevinding als bewust niet-ingericht af te sluiten.
 
-Laat weten wanneer stap 1 gezet is, dan controleren wij het direct.
+Laat weten wanneer de records staan, dan controleren wij het direct.
 
 Met vriendelijke groet,
 

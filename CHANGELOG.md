@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-08-22 (later) — klantmail korter, met de twee valkuilen die een ronde kosten
+
+Het template stuurde bij Noaberkracht twee keer een extra ronde heen en weer.
+Beide oorzaken zaten in wat de mail niet zei, niet in wat de klant fout deed.
+
+- **Zelfcontrole toegevoegd.** De klant krijgt nu per stap een `nslookup`-regel
+  om zelf te zien of het record er staat vóór hij "het staat erin" meldt.
+  Gemeten 2026-08-22 om 20:11: beide hostnamen gaven bij hun eigen nameserver
+  nog `A 81.24.6.82` met TTL 300 — geen cache, maar een wijziging die niet was
+  opgeslagen of gepubliceerd.
+- **Verwijderen-dan-aanmaken.** Veel beheerpanelen laten het type van een
+  bestaand record niet wijzigen, en een aparte publiceer-knop is ook gewoon.
+  Allebei nu expliciet in stap 2, met wat er misgaat als je het niet weet: een
+  CNAME náást een A-record maakt de site voor een deel van de bezoekers stuk.
+
+Verder ingekort — de vorige versie was drie schermen. Stap 2 zegt nu ook dat er
+géén onderbreking te verwachten is, want met de eigendoms-TXT uit stap 1 is de
+hostname al actief vóór de omzetting; dat is de opbrengst van dat record.
+
+Bovenaan een notitie dat meerdere hostnamen van dezelfde beheerder in één mail
+horen, en een sectie die vastlegt welke drie dingen er bewust in staan en
+waarom, zodat ze er niet nog eens uit worden geredigeerd.
+
 ## 2026-08-22 — saas-fleet-status.sh: onafhankelijk van de resolver van de machine
 
 Twee defecten, beide zichtbaar geworden op een werkstation waarvan de
