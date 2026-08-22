@@ -95,8 +95,27 @@ hosts_from_cluster() {
     done
 }
 
-http_status() {
+# Het adres waarmee we verbinden. EDGE_IP wint; anders het opgeloste A-record,
+# zodat curl en openssl niet afhankelijk zijn van de resolver van de machine —
+# gezien op 2026-08-22: een kapotte ISP-resolver liet elke host als onbereikbaar
+# ogen terwijl ze 200 gaven.
+connect_ip() {
   local host="$1"
+  if [[ -n "$EDGE_IP" ]]; then
+    echo "$EDGE_IP"
+  else
+    dig_rr "$host" A | only_v4 | head -1
+  fi
+}
+
+http_status() {
+  local host="$1" ip
+  ip="$(connect_ip "$host")"
+  if [[ -n "$ip" ]]; then
+    curl -sSI --max-time "$TIMEOUT" --resolve "${host}:443:${ip}" \
+      "https://${host}/" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '\r'
+    return 0
+  fi
   if [[ -n "$EDGE_IP" ]]; then
     curl -sSI --max-time "$TIMEOUT" --resolve "${host}:443:${EDGE_IP}" \
       "https://${host}/" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '\r'
@@ -108,8 +127,9 @@ http_status() {
 
 cert_issuer() {
   local host="$1"
-  local connect="${host}:443"
-  [[ -n "$EDGE_IP" ]] && connect="${EDGE_IP}:443"
+  local ip connect="${host}:443"
+  ip="$(connect_ip "$host")"
+  [[ -n "$ip" ]] && connect="${ip}:443"
   echo | timeout "$TIMEOUT" openssl s_client -connect "$connect" -servername "$host" 2>/dev/null |
     openssl x509 -noout -issuer 2>/dev/null |
     sed -n 's/.*CN *= *//p' | cut -c1-18
@@ -153,9 +173,9 @@ report_host() {
   aaaa="$(dig_rr "$host" AAAA | only_v6 | head -1)"
   dcv="$(dig_rr "_acme-challenge.${host}" CNAME | head -1)"
   own="$(dig_rr "_cf-custom-hostname.${host}" TXT | head -1)"
-  status="$(http_status "$host")"
-  issuer="$(cert_issuer "$host")"
-  v6="$(ipv6_ok "$host")"
+  status="$(http_status "$host" || true)"
+  issuer="$(cert_issuer "$host" || true)"
+  v6="$(ipv6_ok "$host" || true)"
   verdict="$(verdict_for "$host" "$cname" "$a" "$aaaa" "$dcv" "$own" "$status")"
 
   printf '%-34s %-4s %-4s %-5s %-6s %-18s %-6s %s\n' \
@@ -202,7 +222,7 @@ main() {
 
   local host
   for host in "${hosts[@]}"; do
-    report_host "$host"
+    report_host "$host" || printf '%-34s %s\n' "$host" "MEETFOUT — overgeslagen"
   done
 }
 

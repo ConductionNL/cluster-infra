@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-08-22 — saas-fleet-status.sh: onafhankelijk van de resolver van de machine
+
+Twee defecten, beide zichtbaar geworden op een werkstation waarvan de
+ISP-resolvers eruit liepen (`communications error … timed out` op 84.116.46.20
+en .21, terwijl 1.1.1.1 en 8.8.8.8 wél antwoordden).
+
+1. **`NS` gold alleen voor `dig`.** `curl` en `openssl` gebruikten nog de
+   resolver van de machine, dus met een kapotte resolver leek elke host
+   onbereikbaar terwijl hij 200 gaf. Nieuwe functie `connect_ip()`: `EDGE_IP`
+   wint, anders het zelf opgeloste A-record, en dat adres gaat als `--resolve`
+   naar curl en als `-connect` naar openssl.
+2. **Eén onbereikbare host brak de hele run af.** Met `set -euo pipefail` gaf een
+   curl-timeout (exit 28) in een command substitution een harde exit, dus de
+   tabel bleef leeg na de kop. Per host is een meetfout nu niet-fataal en komt er
+   `MEETFOUT — overgeslagen` te staan.
+
+Voor een meetinstrument is dat tweede het ergste van de twee: het verschil tussen
+"deze host antwoordt niet" en "de meting is gestopt" is precies wat je wil zien.
+
+Gemeten na de fix: `open.dinkelland.nl` en `open.tubbergen.nl` staan beide op
+`stap1-half` — DCV-CNAME aanwezig, eigendoms-TXT niet, 200 over IPv4, geen AAAA.
+
 ## 2026-08-21 — ExternalSecret krijgt een health-check, sync-waves worden een barrier
 
 Argo kende geen health voor `external-secrets.io/ExternalSecret` en beschouwde
