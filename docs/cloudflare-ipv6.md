@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-08-22
+last_reviewed: 2026-08-28
 owner: info@conduction.nl
 ---
 
@@ -55,22 +55,48 @@ Zone-delegatie van één subdomein (*subdomain setup*) kan **niet**: Enterprise-
 Stap 1–4 zijn bij ons en veranderen niets voor de klant.
 
 1. Zone `openwoo.app` → SSL/TLS → **Custom Hostnames** → aanzetten.
-2. DNS → Records → `customers` → A `81.24.6.82` → **Proxied**. Dat wordt de
+2. DNS → Records → `saas` → A `81.24.6.82` → **Proxied**. Dat wordt de
    fallback origin; instellen op de Custom-Hostnames-pagina, wachten op *Active*.
+   (Waarom `saas` en niet `customers`: zie § Zoals ingericht.)
 3. **Add Custom Hostname** → de klanthost. Cloudflare-managed cert, minimum
    TLS 1.2, validatie via **Delegated DCV**.
-4. Noteer de DCV-hostnaam (`<uuid>.dcv.cloudflare.com`) van dezelfde pagina.
-5. De klant zet:
+4. Noteer de DCV-hostnaam (`<uuid>.dcv.cloudflare.com`) van dezelfde pagina en
+   haal de eigendomswaarde op:
+   `CF_API_TOKEN=... ./scripts/cf-verify.sh --ownership <hostnaam>`
+5. De klant zet **eerst deze twee**. Hier verschuift nog geen verkeer:
 
-       open.dinkelland.nl.                 CNAME  customers.openwoo.app.
-       _acme-challenge.open.dinkelland.nl. CNAME  open.dinkelland.nl.<uuid>.dcv.cloudflare.com.
+       _acme-challenge.open.dinkelland.nl.    CNAME  open.dinkelland.nl.<uuid>.dcv.cloudflare.com.
+       _cf-custom-hostname.open.dinkelland.nl. TXT   <eigendomswaarde>
+
+   De DCV-CNAME laat het certificaat uitgeven; de TXT activeert de hostname.
+   Sla die TXT niet over — zonder eigendomsbewijs routeert de edge niet, ook al
+   staat het certificaat op `active`. Zie § Hostname-activatie.
+
+   **Wil de klant CAA, dan moet dat nú**, zolang de naam nog een A-record is:
+
        open.dinkelland.nl.                 CAA    0 issue "letsencrypt.org"
        open.dinkelland.nl.                 CAA    0 issue "pki.goog; cansignhttpexchanges=yes"
        open.dinkelland.nl.                 CAA    0 issue "ssl.com"
 
-6. Verifiëren: `./scripts/check-saas-hostname.sh open.dinkelland.nl`
-   Vóór cutover kan dat al tegen de edge: `EDGE_IP=<cf-ip> ./scripts/check-saas-hostname.sh …`
-7. Terugrollen is bij de klant: CNAME weer A-records.
+   Na stap 7 kan dat niet meer, en de CAA die er stond werkt dan ook niet meer:
+   naast een CNAME mag op dezelfde naam volgens de DNS-standaard geen ander
+   recordtype staan. Een CA volgt de CNAME en komt uit bij de CAA van
+   `saas.openwoo.app` → `openwoo.app`, en die zone publiceert er geen. Gemeten
+   2026-08-28: `open.tubbergen.nl` (nog een A-record) heeft de drie CA's plus
+   een `iodef`, `open.dinkelland.nl` (inmiddels CNAME) heeft effectief géén CAA.
+   Dat is niet kapot — geen CAA betekent geen beperking — maar het is wél een
+   stille versoepeling die je de klant hoort te melden in plaats van te laten
+   ontdekken. Alle drie de CA's zijn verplicht zolang de CAA er staat: zie
+   [caa.md](caa.md).
+
+6. Meten vóór de cutover, nu de hostname actief is:
+   `EDGE_IP=<cf-ip> ./scripts/check-saas-hostname.sh open.dinkelland.nl`
+7. Pas daarna de site-CNAME, en die **vervangt** het A-record:
+
+       open.dinkelland.nl.                 CNAME  saas.openwoo.app.
+
+8. Nameten zonder `EDGE_IP`: `./scripts/check-saas-hostname.sh open.dinkelland.nl`
+9. Terugrollen is bij de klant: CNAME weer A-records.
 
 Bij de fallback-origin-route stuurt Cloudflare SNI = klanthostnaam, dus ons
 bestaande Let's Encrypt-certificaat volstaat en Full (strict) houdt. Gebruik
@@ -235,7 +261,7 @@ maakt het sneller maar minder betrouwbaar op trage hosts.
 ## Via de API controleren en zetten
 
     CF_API_TOKEN=... ./scripts/cf-verify.sh              # leest zone-modus, fallback origin, custom hostnames, rule
-    CF_API_TOKEN=... ./scripts/cf-verify.sh --ownership   # wat er nog nodig is om `pending` op te heffen
+    CF_API_TOKEN=... ./scripts/cf-verify.sh --ownership   # wat er nog nodig is om `pending`/`moved` op te heffen
     CF_API_TOKEN=... ./scripts/cf-configrule-apply.sh    # dry-run van de Configuration Rule
     CF_API_TOKEN=... ./scripts/cf-configrule-apply.sh --apply
 
@@ -316,7 +342,7 @@ zelf in plaats van dit getal te vertrouwen:
 |---|---|
 | `*.openwoo.app` (live) | proxy-vlag; edge-cert is het universal pack |
 | `*.accept.openwoo.app` | proxy-vlag; edge-cert is het advanced pack (`CN=accept.openwoo.app`) |
-| klantdomeinen (`open.*.nl`) | Cloudflare for SaaS; wacht op twee records van de klant in stap 1 (DCV-CNAME + eigendoms-TXT) en de site-CNAME in stap 2 |
+| klantdomeinen (`open.*.nl`) | Cloudflare for SaaS; wacht op twee records van de klant in stap 1 van de klantmail (DCV-CNAME + eigendoms-TXT) en de site-CNAME in stap 2 daarvan |
 | `*.commonground.nu` (Nextcloud) | **kan niet** via deze route — 100 MB bodylimiet tegen `proxy-body-size: 16G` |
 
 De klantdomeinen die nu al AAAA hebben, staan niet op onze loadbalancer
@@ -334,16 +360,28 @@ Support-antwoorden per situatie: `mail-ipv6-support.md`.
 ## Hostname-activatie: het certificaat is niet genoeg
 
 Een custom hostname heeft twee onafhankelijke statussen. `ssl.status` gaat op
-`active` zodra het certificaat is uitgegeven — dat regelt de DCV-CNAME uit stap 1.
-De hostname zelf (`status`) blijft daarnaast op `pending` tot Cloudflare eigendom
-heeft bevestigd, en zolang dat zo is routeert de edge niet: **HTTP 409**, met
+`active` zodra het certificaat is uitgegeven — dat regelt de DCV-CNAME uit stap 1 van de klantmail.
+De hostname zelf (`status`) blijft daarnaast onbevestigd tot Cloudflare eigendom
+heeft vastgesteld, en zolang dat zo is routeert de edge niet: **HTTP 409**, met
 `custom hostname does not CNAME to this zone` in `verification_errors`.
 
+**Die status heet niet altijd `pending`.** Is de hostname aangemaakt vóórdat de
+CNAME er stond, dan heeft Cloudflare al eens gekeken, niets gevonden, en zet hij
+`moved`. Wie op "pending" zoekt herkent zijn eigen storing dan niet, terwijl het
+dezelfde blokkade met dezelfde oplossing is. Gemeten 2026-08-28 bij
+`open.dinkelland.nl`: aangemaakt 18-08, certificaat `active` sinds 19-08,
+CNAME pas deze week gezet, en toen nog steeds `status: moved` — Cloudflare
+hervalideert een `moved`-hostname niet vanzelf snel genoeg om op te wachten.
+Behandel `pending` en `moved` als één toestand: eigendom niet bevestigd.
+
 Standaard bevestigt Cloudflare eigendom door de site-CNAME zelf te zien — maar
-dat is stap 2, en die willen we juist pas zetten nadat we de route hebben
-gemeten. Die kip-ei zit in de eerste versie van `mail-ipv6-klant.md` en kwam op
-2026-08-19 bij Noaberkracht naar boven: certificaat `active`, hostname `pending`,
-edge 409, stap 2 niet te verantwoorden.
+dat is stap 2 van de klantmail, en die willen we juist pas zetten nadat we de
+route hebben gemeten. Die kip-ei zit in de eerste versie van
+`mail-ipv6-klant.md` en kwam op 2026-08-19 bij Noaberkracht naar boven:
+certificaat `active`, hostname `pending`, edge 409, stap 2 niet te
+verantwoorden. Op 2026-08-28 kwam bij dezelfde klant de andere volgorde langs —
+site-CNAME gezet zonder eigendoms-TXT — met `open.dinkelland.nl` offline tot
+gevolg. Beide volgordes lopen stuk op hetzelfde ontbrekende record.
 
 Uitweg is pre-validatie. Twee wegen, per hostnaam op te vragen met
 `cf-verify.sh --ownership`:
@@ -351,7 +389,7 @@ Uitweg is pre-validatie. Twee wegen, per hostnaam op te vragen met
     _cf-custom-hostname.<hostnaam>.  TXT  <uuid>          bij de klant, één record
     http://<hostnaam>/.well-known/cf-custom-hostname-challenge/<uuid>   bij ons
 
-De TXT is de goedkoopste: één extra record in stap 1, en de hostname wordt actief
+De TXT is de goedkoopste: één extra record in stap 1 van de klantmail, en de hostname wordt actief
 zonder dat er verkeer verschuift. De HTTP-variant kan zonder de klant zolang die
 hostnaam nog naar onze loadbalancer wijst, maar vraagt een route op de
 tenant-frontend en is daarmee duurder dan het probleem.

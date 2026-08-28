@@ -13,18 +13,22 @@
 # Vóór cutover kun je de edge al testen met EDGE_IP: dan wordt de hostnaam
 # geforceerd naar dat Cloudflare-adres opgelost in plaats van via DNS.
 #
+# TARGET is de fallback origin waar de klant-CNAME heen moet wijzen; de default
+# `saas.openwoo.app` is wat er sinds 2026-08-18 staat. Wijkt die naam ooit af,
+# zet TARGET dan mee — anders is het "verwacht"-oordeel misleidend.
+#
 # Writes: read-only
 # Idempotent: yes
 # Requires: dig, curl, openssl
 #
 # Usage:
 #   ./scripts/check-saas-hostname.sh open.dinkelland.nl
-#   TARGET=customers.openwoo.app ./scripts/check-saas-hostname.sh open.dinkelland.nl
+#   TARGET=customers.openwoo.app ./scripts/check-saas-hostname.sh open.dinkelland.nl   # ander doel
 #   EDGE_IP=104.21.60.114 ./scripts/check-saas-hostname.sh open.dinkelland.nl
 
 set -euo pipefail
 
-readonly TARGET="${TARGET:-customers.openwoo.app}"
+readonly TARGET="${TARGET:-saas.openwoo.app}"
 readonly EDGE_IP="${EDGE_IP:-}"
 readonly TIMEOUT="${TIMEOUT:-15}"
 readonly HEADERS='content-security-policy|x-frame-options|referrer-policy|strict-transport-security|x-content-type-options'

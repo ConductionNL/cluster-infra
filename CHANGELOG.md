@@ -1,6 +1,55 @@
 # Changelog
 
-## 2026-08-22 (laatste) — vastgelegd waaróm Cloudflare in het pad zit, en wanneer het eruit mag
+## 2026-08-28 (laatste) — storing `open.dinkelland.nl`: drie gaten gedicht die de procedure openliet
+
+`open.dinkelland.nl` lag eruit met een Cloudflare-foutpagina "Error 1001 — DNS
+resolution error". Dat is misleidend: de edge geeft **HTTP 409** met `error code:
+1001` in de body, en dat is de gedocumenteerde toestand *eigendom niet bevestigd*.
+De site-CNAME was gezet zonder de eigendoms-TXT. Alles aan onze kant stond goed
+(zone flexible, Configuration Rule actief op `ssl=strict`, fallback origin
+`saas.openwoo.app` → A `81.24.6.82` geproxied, certificaat `active` van Google
+Trust Services). Gemeten 2026-08-28 11:52–12:10 UTC.
+
+Drie dingen bleken in de documentatie te ontbreken of niet te kloppen, alle drie
+direct medeoorzaak of vertraging bij het vinden:
+
+**De status heet niet altijd `pending`.** Is de custom hostname aangemaakt vóórdat
+de CNAME er stond, dan heeft Cloudflare al eens gekeken en zet hij `moved`. Beide
+hostnamen stonden op `moved`; wie op "pending" grept herkent zijn eigen storing
+niet. `cloudflare-ipv6.md` § Hostname-activatie, `mail-ipv6-klant.md`,
+`cf-verify.sh` en `saas-fleet-status.sh` behandelen `pending` en `moved` nu als
+één toestand.
+
+**Test B stap 5 vroeg alleen de DCV-CNAME, niet de eigendoms-TXT.** De TXT stond
+wél in de klantmail en in § Hostname-activatie, maar niet in de procedure zelf —
+dus wie stap voor stap werkte, sloeg hem over. Stap 5 vraagt nu beide records
+eerst, en de site-CNAME is een aparte stap ná de meting (Test B telt nu negen
+stappen; verwijzingen naar "stap 1"/"stap 2" elders slaan op de klantmail en zijn
+als zodanig benoemd).
+
+**CAA en CNAME kunnen niet samen op één naam.** Stap 5 zette ze onder elkaar,
+wat volgens de DNS-standaard niet kan. Gevolg in de praktijk: `open.tubbergen.nl`
+(nog een A-record) heeft de drie CA's plus `iodef`, `open.dinkelland.nl` heeft na
+de omzetting effectief géén CAA — een CA volgt de CNAME en komt uit bij
+`openwoo.app`, dat er geen publiceert. Geen beperking dus, maar een stille
+versoepeling. De procedure zet de CAA nu vóór de cutover en benoemt dat hij
+daarna vervalt; de klantmail verwijst ernaar.
+
+Daarnaast: `check-saas-hostname.sh` had nog `customers.openwoo.app` als
+`TARGET`-default, terwijl de fallback origin sinds 2026-08-18 `saas.openwoo.app`
+is. Zonder expliciete `TARGET=` gaf het script daardoor een misleidend
+"verwacht"-oordeel. Default rechtgezet en de betekenis van `TARGET` in de header
+uitgelegd. Stap 2 van Test B noemt nu ook `saas` in plaats van `customers`.
+
+Geraakt: `docs/cloudflare-ipv6.md`, `docs/mail-ipv6-klant.md`,
+`scripts/check-saas-hostname.sh`, `scripts/cf-verify.sh`,
+`scripts/saas-fleet-status.sh`.
+
+Openstaand bij de klant: de twee eigendoms-TXT's. Voor `open.tubbergen.nl` geldt
+uitdrukkelijk dat de site-CNAME pas ná activatie mag — die host draait nu nog
+gewoon op de loadbalancer.
+
+## 2026-08-22 — vastgelegd waaróm Cloudflare in het pad zit, en wanneer het eruit mag
 
 De reden stond verspreid over de pagina en nergens als staande afspraak, terwijl
 het de belangrijkste zin van het hele dossier is: **Cloudflare zit er om precies

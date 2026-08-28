@@ -15,7 +15,7 @@
 # De oordeelkolom kent zes standen:
 #   klaar         CNAME naar de fallback origin en een AAAA — de uitrol is af
 #   stap2-open    DCV én eigendom staan; alleen het verkeer moet nog om
-#   stap1-half    DCV staat, eigendoms-TXT mist — de hostname blijft `pending`
+#   stap1-half    DCV staat, eigendoms-TXT mist — de hostname blijft `pending`/`moved`
 #   niet-begonnen geen van beide records; hier is nog geen mail uit
 #   elders        staat niet op onze loadbalancer; een ander platform serveert dit
 #   kapot-<code>  foutstatus aan de edge (409 = hostname nog niet actief)

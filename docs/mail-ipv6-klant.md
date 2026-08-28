@@ -1,5 +1,5 @@
 ---
-last_reviewed: 2026-08-22
+last_reviewed: 2026-08-28
 owner: info@conduction.nl
 ---
 
@@ -22,12 +22,21 @@ uniek en moet in stap 1 mee:
 
     CF_API_TOKEN=... ./scripts/cf-verify.sh --ownership <hostnaam>
 
-Zonder dat record blijft de hostname op `pending` staan met de melding
+Zonder dat record blijft de hostname onbevestigd staan met de melding
 `custom hostname does not CNAME to this zone`, en dan routeert de edge niet —
-status 409. Het certificaat wordt wél uitgegeven, dus `ssl: active` met
-`status: pending` is de normale tussenstand als je dit vergeet. Aantoonbaar
-misgegaan bij Noaberkracht op 2026-08-19: stap 1 vroeg alleen de DCV-CNAME,
-waarna de edge niet te meten was en stap 2 dus niet verstuurd kon worden.
+status 409. Het certificaat wordt wél uitgegeven, dus `ssl: active` met een
+niet-actieve `status` is de normale tussenstand als je dit vergeet. Die status
+heet `pending` als de hostname nog nooit gecontroleerd is en `moved` als
+Cloudflare al eens keek toen de CNAME er niet stond; behandel ze als één
+toestand.
+
+Twee keer aantoonbaar misgegaan bij Noaberkracht, in beide volgordes:
+
+- **2026-08-19** — stap 1 vroeg alleen de DCV-CNAME, waarna de edge niet te
+  meten was en stap 2 dus niet verstuurd kon worden.
+- **2026-08-28** — stap 2 ging er zonder de TXT overheen: de CNAME stond,
+  `open.dinkelland.nl` was offline met een 409 (`error code: 1001` in de
+  browser) en de hostname stond op `moved`.
 
 **Stap 2 pas versturen** nadat de edge gemeten is:
 
@@ -38,6 +47,12 @@ Niet in deze mail zetten: geen CAA-verzoek (zonder CAA is er geen beperking; en
 zetten ze er toch een, dan moeten `letsencrypt.org`, `pki.goog` én `ssl.com`
 erin, want de CA wordt door het platform gekozen en kan wisselen) en geen
 DANE-belofte.
+
+Staat er al een CAA op de hostnaam, dan werkt die na stap 2 niet meer: naast een
+CNAME mag geen ander recordtype op dezelfde naam staan, dus de CA volgt de CNAME
+en komt uit bij `openwoo.app`, dat er geen publiceert. Geen beperking dus, maar
+wel een versoepeling die je hoort te melden in plaats van te laten ontdekken.
+Achtergrond: `cloudflare-ipv6.md` § Test B stap 5.
 
 **Meerdere hostnamen in één mail** als het dezelfde beheerder is — zet de
 records dan onder elkaar per hostnaam. Twee losse mails leveren twee losse

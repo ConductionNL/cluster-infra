@@ -7,7 +7,7 @@
 #
 # Met --ownership drukt het script per custom hostname de records af waarmee de
 # klant eigendom bewijst. Dat is een ander record dan de certificaatvalidatie:
-# zonder eigendomsbewijs blijft de hostname op `pending` en routeert de edge niet
+# zonder eigendomsbewijs blijft de hostname op `pending` of `moved` en routeert de edge niet
 # (status 409), ook al staat het certificaat op `active`.
 #
 # Leest vier dingen en velt per stuk een oordeel: de SSL-modus van de zone, het
@@ -34,7 +34,7 @@
 #   CF_API_TOKEN=... ./scripts/cf-verify.sh
 #   CF_API_TOKEN=... CF_ZONE=openwoo.app ./scripts/cf-verify.sh
 #   CF_API_TOKEN=... FALLBACK=saas.openwoo.app ./scripts/cf-verify.sh
-#   CF_API_TOKEN=... ./scripts/cf-verify.sh --ownership              # alle pending hostnames
+#   CF_API_TOKEN=... ./scripts/cf-verify.sh --ownership              # alle custom hostnames
 #   CF_API_TOKEN=... ./scripts/cf-verify.sh --ownership open.dinkelland.nl
 
 set -euo pipefail
@@ -74,7 +74,7 @@ print(json.dumps(d['result']))
 " "$body"
 }
 
-# Drukt per custom hostname af wat er nog nodig is om `pending` op te heffen.
+# Drukt per custom hostname af wat er nog nodig is om `pending`/`moved` op te heffen.
 show_ownership() {
   local zone_id="$1" want="$2" hosts
   hosts="$(cf_result "zones/${zone_id}/custom_hostnames?per_page=50")" ||
