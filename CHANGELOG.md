@@ -1,6 +1,66 @@
 # Changelog
 
-## 2026-08-28 (laatste) — storing `open.dinkelland.nl`: drie gaten gedicht die de procedure openliet
+## 2026-08-31 (laatste) — `open.dinkelland.nl` weer online; prevalidatie bewezen; remedie in een script
+
+**De storing.** Aan de klantkant stond alles al goed: eigendoms-TXT, DCV-CNAME en
+site-CNAME, met een TXT-waarde identiek aan wat Cloudflare verwachtte. Toch bleef
+de custom hostname op `status: moved` met cert `active`, edge 409, en een
+achterhaalde `custom hostname does not CNAME to this zone`. Cloudflare
+hervalideert die toestand niet vanzelf, ook niet als alle records kloppen. Dat
+geval stond niet in de documentatie: § Hostname-activatie noemde de TXT als "de
+uitweg" en hield daar op.
+
+Opgelost met één PATCH die de bestaande ssl-config terugstuurt (eerst uitlezen,
+dan precies dát terugsturen). Geen configwijziging, geen nieuw certificaat, geen
+verkeersverschuiving. Verloop `moved` → `active_redeploying` → `active` binnen
+vier minuten. Nagemeten 13:33:44 CEST: 200 over IPv6
+(`2606:4700:3035::ac43:c3e8`) en IPv4, `CN=open.dinkelland.nl` van Google Trust
+Services, en `cf-verify.sh --ownership` meldt "eigendom is al bevestigd".
+
+**Prevalidatie werkt — dat was tot vandaag een aanname.** Om 13:42 CEST stond
+`open.tubbergen.nl` zelf op `active` met lege `verification_errors`, terwijl er
+géén site-CNAME en géén AAAA voor die host bestond en hij 200 gaf via de
+loadbalancer. Een hostname wordt dus `active` op de eigendoms-TXT alleen, zonder
+dat er verkeer verschuift; de cut-over heeft daarmee geen 409-venster. Het
+mechanisme is níet vastgesteld — eigen ritme van Cloudflare of een zone-brede
+hercontrole door de PATCH op dinkelland zijn met deze meting niet te scheiden.
+Daarom: meet de status, leid hem niet af uit verstreken tijd. Dat maakt ook een
+poll of een webhook onnodig; Cloudflare biedt voor deze statusovergang trouwens
+geen webhook.
+
+**Nieuw: `scripts/cf-revalidate.sh`.** De remedie zat na de storing alleen in een
+sessie, niet in de repo. Het script leest de bestaande ssl-config en stuurt die
+terug — het verzint nooit een `method`, want een andere DCV-methode verlegt de
+certificaatroute van een werkend certificaat. Drie weigeringen ingebouwd: al
+`active` (niets te hervalideren), geen eigendoms-TXT in DNS (klantmail eerst af),
+en geen site-CNAME zonder `--force` (dat is het prevalidatiepad en hoort een
+bewuste keuze te zijn). Read-only te inspecteren met `--dry-run`. Getest tegen
+beide hostnames; shellcheck schoon.
+
+**Note-blocks voor menselijke acties.** `cloudflare-ipv6.md` markeert stappen die
+een mens doet met een `> **Menselijke actie**`-blok, met de conventie uitgelegd
+onder de H1. Aanleiding: wie de pagina via het portaal of de assistent op
+`platform.commonground.nu` leest, moet zonder verdere context zien welke stap niet
+door een agent uitgevoerd hoort te worden. Drie blokken: de conventie, de PATCH
+(vraagt SSL and Certificates: **Edit**, terwijl `cf-verify.sh` met Read toe kan),
+en de cut-over (verkeer verschuift, samen met de klant). Vorm is het blockquote
+met vet label, want dat gebruiken de handboek-repos al (41× `> **Note`, 19×
+`> **Warning`, 0× `:::` in acht repos) en `handbook/mkdocs.yml` heeft geen
+`markdown_extensions`, dus `!!! note` zou niet renderen.
+
+**Configuration Rule: duplicatie eruit, niet "geactualiseerd".** De pagina
+noemde de regel op drie plekken: een per-hostnaam-variant en een voorgestelde
+negatieve match in § Zoals ingericht, een tweede negatieve match in § Onze eigen
+hosts (twee namen uitgesloten), en de gemeten live regel in § Via de API (drie
+namen — `www.openwoo.app` is er op 18-08 bij gezet). De eerste twee lazen als
+actueel terwijl ze de bedoeling van 18-08 waren. Beide zijn nu een verwijzing
+naar de gemeten regel, die één keer in de pagina staat (docs-contract §5).
+Nagemeten 13:30 CEST: regel actief, expressie onveranderd.
+
+Alleen documentatie en één script; aan Cloudflare is één PATCH gedaan op
+`open.dinkelland.nl`. Geen manifests, geen DNS-wijziging van onze kant.
+
+## 2026-08-28 — storing `open.dinkelland.nl`: drie gaten gedicht die de procedure openliet
 
 `open.dinkelland.nl` lag eruit met een Cloudflare-foutpagina "Error 1001 — DNS
 resolution error". Dat is misleidend: de edge geeft **HTTP 409** met `error code:

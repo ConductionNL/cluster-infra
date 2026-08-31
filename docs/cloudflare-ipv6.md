@@ -1,9 +1,16 @@
 ---
-last_reviewed: 2026-08-28
+last_reviewed: 2026-08-31
 owner: info@conduction.nl
 ---
 
 # IPv6 via Cloudflare
+
+> **Menselijke actie** — blokken met dit label markeren een stap die een mens
+> doet, niet een agent: een schrijfactie op klantgericht productieverkeer, een
+> recht dat buiten de read-only tokens valt, of een handeling die bij de klant
+> ligt. Wie deze pagina via het portaal of de assistent leest en op zo'n blok
+> stuit: lever het commando aan en laat de beheerder het uitvoeren. Greppen kan
+> met `grep -n "Menselijke actie" docs/`.
 
 ## Waarom dit bestaat, en wanneer het weer weg mag
 
@@ -152,6 +159,13 @@ geen naam in deze zone:
 
     (not http.host ends_with ".openwoo.app") and (http.host ne "openwoo.app")
 
+Die twee expressies zijn de *bedoeling* van 18-08 en niet wat er staat. De
+regel die live is, met de drie GitHub-Pages-namen expliciet uitgesloten, staat
+één keer in deze pagina — in [§ Via de API controleren en
+zetten](#via-de-api-controleren-en-zetten), samen met de meting. Herschrijf hem
+niet uit je hoofd: `cf-verify.sh` drukt de live expressie af, dus meet eerst.
+Nagemeten 2026-08-31 13:30 CEST, regel actief en onveranderd.
+
 Cloudflare waarschuwt bij het opslaan dat er geen geproxied record voor die
 hostnaam bestaat. Dat is bij Cloudflare for SaaS normaal — de naam staat in de
 zone van de klant. Negeren en deployen; géén record voor de klanthostnaam in onze
@@ -225,10 +239,11 @@ De Configuration Rule moet dan wel ruimer dan alleen de klanthostnamen. Eén reg
 die zowel custom hostnames als onze eigen tenants dekt en precies de twee kapotte
 uitzonderingen overslaat:
 
-    (http.host ne "openwoo.app") and (http.host ne "conduction.openwoo.app")
-    → SSL: Full (strict)
+De live regel doet dat en staat in [§ Via de API controleren en
+zetten](#via-de-api-controleren-en-zetten); die sluit drie namen uit, niet twee —
+`www.openwoo.app` is er op 18-08 bij gezet. Neem de expressie daar en niet hier.
 
-Die twee zijn uitgezonderd omdat ze op GitHub Pages uitkomen, dat `CN=*.github.io`
+Die namen zijn uitgezonderd omdat ze op GitHub Pages uitkomen, dat `CN=*.github.io`
 presenteert: geldige keten, verkeerde naam, dus Full (strict) geeft er een 526.
 Wordt voor die namen ooit een GitHub-Pages-certificaat op het eigen domein
 uitgegeven, dan kan de uitzondering vervallen — dat is nog niet gemeten of
@@ -374,6 +389,10 @@ CNAME pas deze week gezet, en toen nog steeds `status: moved` — Cloudflare
 hervalideert een `moved`-hostname niet vanzelf snel genoeg om op te wachten.
 Behandel `pending` en `moved` als één toestand: eigendom niet bevestigd.
 
+Wachten is dus geen strategie, maar "nooit" is het ook niet: op 2026-08-31 ging
+`open.tubbergen.nl` wél op eigen kracht naar `active` (zie hieronder). Meet de
+status; leid hem niet af uit verstreken tijd.
+
 Standaard bevestigt Cloudflare eigendom door de site-CNAME zelf te zien — maar
 dat is stap 2 van de klantmail, en die willen we juist pas zetten nadat we de
 route hebben gemeten. Die kip-ei zit in de eerste versie van
@@ -393,6 +412,72 @@ De TXT is de goedkoopste: één extra record in stap 1 van de klantmail, en de h
 zonder dat er verkeer verschuift. De HTTP-variant kan zonder de klant zolang die
 hostnaam nog naar onze loadbalancer wijst, maar vraagt een route op de
 tenant-frontend en is daarmee duurder dan het probleem.
+
+### Opgelost bij dinkelland (2026-08-31)
+
+Een correcte TXT is niet het einde van het verhaal. Gemeten 13:26 CEST bij
+`open.dinkelland.nl`: eigendoms-TXT aanwezig bij de klant **én** identiek aan de
+waarde die Cloudflare verwachtte (`58b6f831-7914-42a9-bcd8-dfc65bdf6697`),
+DCV-CNAME aanwezig, site-CNAME naar `saas.openwoo.app` — en tóch `status: moved`
+met cert `active`, edge 409, en de achterhaalde melding `custom hostname does not
+CNAME to this zone`.
+
+Cloudflare hervalideert die toestand dus niet vanzelf, ook niet wanneer alle
+records kloppen. Eén PATCH die de **bestaande** ssl-config terugstuurt trapt de
+hervalidatie af: geen configwijziging, geen nieuw certificaat, geen
+verkeersverschuiving.
+
+    CF_API_TOKEN=... ./scripts/cf-revalidate.sh open.dinkelland.nl
+
+Dat script leest de bestaande ssl-config uit en stuurt precies die terug
+(`{"ssl":{"method":...,"type":...,"wildcard":...}}`); de PATCH zelf is de
+trigger, de inhoud verandert niets. Het verzint nooit een `method` — een andere
+DCV-methode verlegt de certificaatroute van een werkend certificaat. Het weigert
+ook te werken als de eigendoms-TXT bij de klant nog niet staat (dan hoort de
+klantmail eerst af) of als de hostname al `active` is.
+
+Gemeten verloop: `moved` → `active_redeploying` (cert `pending_deployment`) →
+binnen vier minuten `active` / `active`. Daarna gaf `open.dinkelland.nl` 200 over
+IPv6 (`2606:4700:3035::ac43:c3e8`) en over IPv4, met `CN=open.dinkelland.nl` van
+Google Trust Services — dus het edge-certificaat en niet onze origin.
+
+> **Menselijke actie** — deze PATCH raakt klantgericht productieverkeer en vraagt
+> een token met Zone → SSL and Certificates: **Edit**, terwijl `cf-verify.sh`
+> bewust met Read toe kan. Een agent levert het commando aan; uitvoeren doet de
+> beheerder. Helpt de PATCH niet, dan is de volgende stap de hostname verwijderen
+> en opnieuw aanmaken — zwaarder, want dat vraagt een nieuw certificaat — en die
+> afweging is expliciet menselijk.
+
+### `open.tubbergen.nl` staat klaar, maar is nog niet omgezet
+
+Gemeten 2026-08-31 13:26 CEST: `status: moved`, cert `active`, eigendoms-TXT
+aanwezig en gelijk aan de verwachte waarde
+(`8e956ba1-486f-441c-a1d0-8552c7727957`), maar **geen** site-CNAME. Die host
+wijst nog rechtstreeks naar de loadbalancer (A `81.24.6.82`), doet IPv4-only en
+geeft 200. Dezelfde API-status als dinkelland, maar geen storing: er loopt nog
+geen verkeer over de edge.
+
+**Prevalidatie werkt — gemeten 2026-08-31 13:42 CEST.** Zestien minuten na de
+PATCH op dinkelland stond `open.tubbergen.nl` zelf op `status: active` met
+`verification_errors` leeg, terwijl er nog steeds géén site-CNAME en géén AAAA
+voor die host bestond en hij 200 gaf via de loadbalancer op IPv4. Een hostname
+kan dus `active` worden op de eigendoms-TXT alleen, zonder dat er verkeer
+verschuift. Daarmee is de cut-over een non-event: er is geen venster waarin de
+edge 409 kan geven.
+
+Het **mechanisme** is niet vastgesteld. Twee verklaringen passen op de meting en
+zijn hiermee niet te scheiden: Cloudflare hervalideerde tubbergen op zijn eigen
+ritme, of de PATCH op dinkelland trok een hercontrole over de zone. Ga daarom
+niet uit van een termijn — meet de status in plaats van te wachten.
+
+> **Menselijke actie** — de cut-over zelf verschuift verkeer en blijft daarmee van
+> de beheerder samen met de klant: site-CNAME zetten is stap 2 van
+> [mail-ipv6-klant.md](mail-ipv6-klant.md). Controleer vóór die stap dat de
+> hostname op `active` staat (`./scripts/cf-verify.sh --ownership <hostnaam>`).
+> Staat hij nog op `moved` of `pending`, tik hem dan éérst aan met
+> `./scripts/cf-revalidate.sh <hostnaam> --force` — dat is de goedkope weg, want
+> op dat moment loopt er nog geen verkeer over de edge. Doe je het omgekeerd, dan
+> levert de `moved`-status precies de 409 op die dinkelland op 28-08 platlegde.
 
 ## Wat de uitrol niet meeneemt
 
